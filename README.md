@@ -6,24 +6,29 @@ It exposes a single HTTP endpoint that classifies intent, routes to the right ag
 
 ## How to run it
 
-1. Create and activate a virtual environment:
+1. Install and start [Ollama](https://ollama.com/download), then pull the model used for intent classification:
+   ```bash
+   ollama pull llama3.1
+   ```
+   This is optional — `classify_intent` falls back to keyword matching if Ollama isn't running — but required for LLM-based routing.
+2. Create and activate a virtual environment:
    ```bash
    python -m venv venv
    source venv/Scripts/activate   # Windows Git Bash
    ```
-2. Install dependencies:
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-3. Start the server:
+4. Start the server:
    ```bash
    uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
    ```
-4. Check it's up:
+5. Check it's up:
    ```bash
    curl http://127.0.0.1:8001/health
    ```
-5. Send a test request:
+6. Send a test request:
    ```bash
    curl -X POST http://127.0.0.1:8001/orchestrate \
      -H "Content-Type: application/json" \
@@ -62,7 +67,7 @@ POST /orchestrate
 - `app/agents/` — one module per agent (`manuals_agent.py`, `iot_agent.py`, `orders_agent.py`, `troubleshooting_agent.py`, `service_agent.py`). Currently placeholder stubs; will call out to MCP servers / RAG / tools.
 - `app/state.py` — shared `OrchestratorState` passed through the graph.
 - `app/schemas.py` — Pydantic request/response models for the API.
-- `app/config.py` — settings (loaded from environment / `.env`).
+- `app/config.py` — settings (loaded from environment / `.env`), including `ollama_base_url` (default `http://localhost:11434`) and `ollama_model` (default `llama3.1`) used by `classify_intent`.
 
 ## Shared state
 
