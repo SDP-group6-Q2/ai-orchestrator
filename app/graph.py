@@ -3,6 +3,7 @@
 from langgraph.graph import END, StateGraph
 
 from app.agents import (
+    run_general_agent,
     run_iot_agent,
     run_manuals_agent,
     run_orders_agent,
@@ -18,6 +19,7 @@ _AGENT_NODES = {
     "orders_agent": run_orders_agent,
     "troubleshooting_agent": run_troubleshooting_agent,
     "service_agent": run_service_agent,
+    "general_agent": run_general_agent,
 }
 
 

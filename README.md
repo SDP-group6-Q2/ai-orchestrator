@@ -55,7 +55,7 @@ POST /orchestrate
  conditional routing (selected_agent)
       |
       v
- agent node (manuals | iot | orders | troubleshooting | service)
+ agent node (manuals | iot | orders | troubleshooting | service | general)
       |
       v
  response returned to backend
@@ -64,7 +64,7 @@ POST /orchestrate
 - `app/main.py` — FastAPI app, exposes `POST /orchestrate` and `GET /health`.
 - `app/graph.py` — builds the LangGraph `StateGraph`: `classify_intent` node, conditional edges to one agent node, then `END`.
 - `app/nodes/classify_intent.py` — router that sets `intent` / `selected_agent` via an Ollama LLM call constrained to a JSON schema; falls back to keyword matching if Ollama is unreachable or returns an invalid response.
-- `app/agents/` — one module per agent (`manuals_agent.py`, `iot_agent.py`, `orders_agent.py`, `troubleshooting_agent.py`, `service_agent.py`). Currently placeholder stubs; will call out to MCP servers / RAG / tools.
+- `app/agents/` — one module per agent (`manuals_agent.py`, `iot_agent.py`, `orders_agent.py`, `troubleshooting_agent.py`, `service_agent.py`). Currently placeholder stubs; will call out to MCP servers / RAG / tools. `general_agent.py` is the exception: it's live, answering greetings and platform questions directly via Ollama (with a static fallback reply if Ollama is unreachable), and is the default when `classify_intent` can't confidently match one of the other five intents.
 - `app/state.py` — shared `OrchestratorState` passed through the graph.
 - `app/schemas.py` — Pydantic request/response models for the API.
 - `app/config.py` — settings (loaded from environment / `.env`), including `ollama_base_url` (default `http://localhost:11434`) and `ollama_model` (default `llama3.1`) used by `classify_intent`.

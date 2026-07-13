@@ -32,9 +32,10 @@ _INTENT_TO_AGENT = {
     "orders": "orders_agent",
     "service": "service_agent",
     "manuals": "manuals_agent",
+    "general": "general_agent",
 }
 
-_DEFAULT_INTENT = "manuals"
+_DEFAULT_INTENT = "general"
 
 _INTENTS = list(_INTENT_TO_AGENT)
 
@@ -52,6 +53,7 @@ _SYSTEM_PROMPT = (
     "- orders: quotes, invoices, contracts, shipments, purchases\n"
     "- service: support tickets, technician visits, complaints\n"
     "- manuals: documentation, instructions, specs, how-to questions\n"
+    "- general: greetings, small talk, or questions about what the platform can do\n"
     "Respond with only the JSON object matching the schema."
 )
 

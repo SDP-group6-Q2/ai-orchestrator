@@ -1,3 +1,4 @@
+from app.agents.general_agent import run as run_general_agent
 from app.agents.iot_agent import run as run_iot_agent
 from app.agents.manuals_agent import run as run_manuals_agent
 from app.agents.orders_agent import run as run_orders_agent
@@ -10,4 +11,5 @@ __all__ = [
     "run_orders_agent",
     "run_troubleshooting_agent",
     "run_service_agent",
+    "run_general_agent",
 ]
