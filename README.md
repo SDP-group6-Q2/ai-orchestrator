@@ -44,7 +44,7 @@ The backend runs on port `8000`; the orchestrator runs on `8001`.
 POST /orchestrate
       |
       v
- classify_intent (keyword-based intent router)
+ classify_intent (LLM-based intent router via Ollama, falls back to keywords)
       |
       v
  conditional routing (selected_agent)
@@ -58,7 +58,7 @@ POST /orchestrate
 
 - `app/main.py` — FastAPI app, exposes `POST /orchestrate` and `GET /health`.
 - `app/graph.py` — builds the LangGraph `StateGraph`: `classify_intent` node, conditional edges to one agent node, then `END`.
-- `app/nodes/classify_intent.py` — first-pass keyword-based router that sets `intent` / `selected_agent`. Swappable for an LLM-based classifier later.
+- `app/nodes/classify_intent.py` — router that sets `intent` / `selected_agent` via an Ollama LLM call constrained to a JSON schema; falls back to keyword matching if Ollama is unreachable or returns an invalid response.
 - `app/agents/` — one module per agent (`manuals_agent.py`, `iot_agent.py`, `orders_agent.py`, `troubleshooting_agent.py`, `service_agent.py`). Currently placeholder stubs; will call out to MCP servers / RAG / tools.
 - `app/state.py` — shared `OrchestratorState` passed through the graph.
 - `app/schemas.py` — Pydantic request/response models for the API.
