@@ -6,24 +6,29 @@ It exposes a single HTTP endpoint that classifies intent, routes to the right ag
 
 ## How to run it
 
-1. Create and activate a virtual environment:
+1. Install and start [Ollama](https://ollama.com/download), then pull the model used for intent classification:
+   ```bash
+   ollama pull llama3.1
+   ```
+   This is optional — `classify_intent` falls back to keyword matching if Ollama isn't running — but required for LLM-based routing.
+2. Create and activate a virtual environment:
    ```bash
    python -m venv venv
    source venv/Scripts/activate   # Windows Git Bash
    ```
-2. Install dependencies:
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
-3. Start the server:
+4. Start the server:
    ```bash
    uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
    ```
-4. Check it's up:
+5. Check it's up:
    ```bash
    curl http://127.0.0.1:8001/health
    ```
-5. Send a test request:
+6. Send a test request:
    ```bash
    curl -X POST http://127.0.0.1:8001/orchestrate \
      -H "Content-Type: application/json" \
@@ -44,13 +49,13 @@ The backend runs on port `8000`; the orchestrator runs on `8001`.
 POST /orchestrate
       |
       v
- classify_intent (keyword-based intent router)
+ classify_intent (LLM-based intent router via Ollama, falls back to keywords)
       |
       v
  conditional routing (selected_agent)
       |
       v
- agent node (manuals | iot | orders | troubleshooting | service)
+ agent node (manuals | iot | orders | troubleshooting | service | general)
       |
       v
  response returned to backend
@@ -58,11 +63,11 @@ POST /orchestrate
 
 - `app/main.py` — FastAPI app, exposes `POST /orchestrate` and `GET /health`.
 - `app/graph.py` — builds the LangGraph `StateGraph`: `classify_intent` node, conditional edges to one agent node, then `END`.
-- `app/nodes/classify_intent.py` — first-pass keyword-based router that sets `intent` / `selected_agent`. Swappable for an LLM-based classifier later.
-- `app/agents/` — one module per agent (`manuals_agent.py`, `iot_agent.py`, `orders_agent.py`, `troubleshooting_agent.py`, `service_agent.py`). Currently placeholder stubs; will call out to MCP servers / RAG / tools.
+- `app/nodes/classify_intent.py` — router that sets `intent` / `selected_agent` via an Ollama LLM call constrained to a JSON schema; falls back to keyword matching if Ollama is unreachable or returns an invalid response.
+- `app/agents/` — one module per agent (`manuals_agent.py`, `iot_agent.py`, `orders_agent.py`, `troubleshooting_agent.py`, `service_agent.py`). Currently placeholder stubs; will call out to MCP servers / RAG / tools. `general_agent.py` is the exception: it's live, answering greetings and platform questions directly via Ollama (with a static fallback reply if Ollama is unreachable), and is the default when `classify_intent` can't confidently match one of the other five intents.
 - `app/state.py` — shared `OrchestratorState` passed through the graph.
 - `app/schemas.py` — Pydantic request/response models for the API.
-- `app/config.py` — settings (loaded from environment / `.env`).
+- `app/config.py` — settings (loaded from environment / `.env`), including `ollama_base_url` (default `http://localhost:11434`) and `ollama_model` (default `llama3.1`) used by `classify_intent`.
 
 ## Shared state
 
