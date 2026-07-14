@@ -11,7 +11,8 @@ _SYSTEM_PROMPT = (
     "platform can help with: manuals & documentation, live machine telemetry (IoT), "
     "orders/quotes/invoices, troubleshooting machine issues, and service tickets. "
     "Keep answers short and friendly. If the user has a specific request in one of "
-    "those areas, tell them to ask it directly so it can be routed appropriately."
+    "those areas, tell them to ask it directly so it can be routed appropriately. "
+    "Do not use emojis."
 )
 
 
