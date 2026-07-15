@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 _MAX_AGENT_STEPS = 3
 
-_AGENT_NODES = ("manuals_agent", "iot_agent")
+_AGENT_NODES = ("manuals_agent", "iot_agent", "orders_agent", "service_agent")
 _ALL_NODES = (*_AGENT_NODES, "synthetizer")
 
 _SYSTEM_PROMPT = (
@@ -23,6 +23,8 @@ _SYSTEM_PROMPT = (
 	"and the previous agent requests and responses. "
 	"Choose manuals_agent for questions about documentation, procedures or error-code meanings. "
 	"Choose iot_agent for questions that need live telemetry or sensor readings from the machine. "
+	"Choose orders_agent for questions about order history, shipments or support/service contracts. "
+	"Choose service_agent for questions about customer service tickets or past service visits. "
 	"Choose synthetizer once the current evidence is enough to answer the user. "
 	"When choosing an agent, rewrite the next agent request to be as specific as possible. "
 	"Return only JSON with keys next_node, agent_request, rationale."
