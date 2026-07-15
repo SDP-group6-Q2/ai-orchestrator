@@ -14,20 +14,24 @@ logger = logging.getLogger(__name__)
 
 _MAX_AGENT_STEPS = 3
 
+_AGENT_NODES = ("manuals_agent", "iot_agent")
+_ALL_NODES = (*_AGENT_NODES, "synthetizer")
+
 _SYSTEM_PROMPT = (
-	"You are the orchestrator for a FleetAssistant RAG workflow. "
+	"You are the orchestrator for a FleetAssistant workflow. "
 	"Decide the next step based on the user request, the planned steps so far, "
 	"and the previous agent requests and responses. "
-	"Only choose between manuals_agent and synthetizer. "
-	"If the current evidence is enough, choose synthetizer. "
-	"If more manual retrieval is needed, choose manuals_agent and rewrite the next agent request to be as specific as possible. "
+	"Choose manuals_agent for questions about documentation, procedures or error-code meanings. "
+	"Choose iot_agent for questions that need live telemetry or sensor readings from the machine. "
+	"Choose synthetizer once the current evidence is enough to answer the user. "
+	"When choosing an agent, rewrite the next agent request to be as specific as possible. "
 	"Return only JSON with keys next_node, agent_request, rationale."
 )
 
 _RESPONSE_SCHEMA = {
 	"type": "object",
 	"properties": {
-		"next_node": {"type": "string", "enum": ["manuals_agent", "synthetizer"]},
+		"next_node": {"type": "string", "enum": list(_ALL_NODES)},
 		"agent_request": {"type": "string"},
 		"rationale": {"type": "string"},
 	},
@@ -92,7 +96,7 @@ class FleetOrchestrator:
 			next_node = parsed.get("next_node")
 			agent_request = parsed.get("agent_request") or state["request"]
 			rationale = parsed.get("rationale") or ""
-			if next_node not in {"manuals_agent", "synthetizer"}:
+			if next_node not in _ALL_NODES:
 				raise ValueError(f"unexpected next node: {next_node!r}")
 			return {
 				"next_node": next_node,
@@ -108,11 +112,11 @@ class FleetOrchestrator:
 		plan = list(state.get("plan", []))
 		plan.append(decision)
 
-		if decision["next_node"] == "manuals_agent":
+		if decision["next_node"] in _AGENT_NODES:
 			agent_calls = list(state.get("agent_calls", []))
 			agent_calls.append(
 				{
-					"agent_name": "manuals_agent",
+					"agent_name": decision["next_node"],
 					"agent_request": decision["agent_request"],
 					"agent_response": "",
 				}
