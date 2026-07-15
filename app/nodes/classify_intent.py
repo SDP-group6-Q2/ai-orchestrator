@@ -79,7 +79,12 @@ def _classify_by_llm(message: str) -> str:
         options={"temperature": 0},
     )
     content = response["message"]["content"]
-    intent = json.loads(content)["intent"]
+    parsed = json.loads(content)
+    # Some models (e.g. gpt-oss) don't reliably honor the schema's field name
+    # and use a synonym like "category" instead of "intent", so match by value.
+    intent = parsed.get("intent") or next(
+        (value for value in parsed.values() if value in _INTENT_TO_AGENT), None
+    )
     if intent not in _INTENT_TO_AGENT:
         raise ValueError(f"model returned unknown intent: {intent!r}")
     return intent
