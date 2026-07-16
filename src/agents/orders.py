@@ -1,4 +1,4 @@
-"""Class-based service agent for FleetAssistant."""
+"""Class-based orders agent for FleetAssistant."""
 
 from __future__ import annotations
 
@@ -8,12 +8,12 @@ from collections.abc import Sequence
 
 import ollama
 
-from FleetAssistant.state import GraphState
-from FleetAssistant.tools.query_service import (
-	LocalServiceClient,
-	ServiceClient,
-	ServiceTicket,
-	ServiceVisit,
+from src.state import GraphState
+from src.tools.query_orders import (
+	ContractRecord,
+	LocalOrdersClient,
+	OrderRecord,
+	OrdersClient,
 )
 
 logger = logging.getLogger(__name__)
@@ -21,61 +21,61 @@ logger = logging.getLogger(__name__)
 _MAX_TOOL_ROUNDS = 3
 
 _SYSTEM_PROMPT = (
-	"You are the customer service agent for FleetAssistant. "
-	"Call list_tickets to fetch the user's open and past support tickets, and "
-	"list_service_history to fetch past service visits, before responding. "
+	"You are the orders agent for FleetAssistant. "
+	"Call list_orders to fetch the user's order and shipment history, and list_contracts "
+	"to fetch the user's active support/service contracts, before responding. "
 	"Answer only once you have grounded evidence from the tools. "
 	"Keep the answer concise and practical."
 )
 
-_LIST_TICKETS_TOOL = {
+_LIST_ORDERS_TOOL = {
 	"type": "function",
 	"function": {
-		"name": "list_tickets",
-		"description": "List the user's customer service tickets, open and closed.",
+		"name": "list_orders",
+		"description": "List the user's order history (parts, shipments, service requests).",
 		"parameters": {"type": "object", "properties": {}, "required": []},
 	},
 }
 
-_LIST_SERVICE_HISTORY_TOOL = {
+_LIST_CONTRACTS_TOOL = {
 	"type": "function",
 	"function": {
-		"name": "list_service_history",
-		"description": "List the user's past service visits and interventions.",
+		"name": "list_contracts",
+		"description": "List the user's active support/service contracts.",
 		"parameters": {"type": "object", "properties": {}, "required": []},
 	},
 }
 
 
-class ServiceAgent:
+class OrdersAgent:
 	def __init__(
 		self,
 		model: str | None = None,
 		base_url: str | None = None,
-		client: ServiceClient | None = None,
+		client: OrdersClient | None = None,
 	):
 		self._model = model or os.getenv("OLLAMA_MODEL", "llama3.1")
 		self._base_url = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-		self._service_client = client or LocalServiceClient()
+		self._orders_client = client or LocalOrdersClient()
 
 	def _client(self) -> ollama.Client:
 		return ollama.Client(host=self._base_url)
 
-	def _format_tickets(self, tickets: Sequence[ServiceTicket]) -> str:
-		if not tickets:
-			return "No service tickets found for this user."
-		return "\n".join(f"- {t['ticket_id']} ({t['status']}, machine {t['machine_id']}): {t['summary']}" for t in tickets)
+	def _format_orders(self, orders: Sequence[OrderRecord]) -> str:
+		if not orders:
+			return "No orders found for this user."
+		return "\n".join(f"- {o['order_id']} ({o['status']}, machine {o['machine_id']}): {o['summary']}" for o in orders)
 
-	def _format_history(self, visits: Sequence[ServiceVisit]) -> str:
-		if not visits:
-			return "No service history found for this user."
-		return "\n".join(f"- {v['visit_id']} on {v['date']} (machine {v['machine_id']}): {v['summary']}" for v in visits)
+	def _format_contracts(self, contracts: Sequence[ContractRecord]) -> str:
+		if not contracts:
+			return "No contracts found for this user."
+		return "\n".join(f"- {c['contract_id']}: {c['summary']}" for c in contracts)
 
 	def _call_tool(self, name: str, user_id: str) -> str:
-		if name == "list_tickets":
-			return self._format_tickets(self._service_client.list_tickets(user_id))
-		if name == "list_service_history":
-			return self._format_history(self._service_client.list_service_history(user_id))
+		if name == "list_orders":
+			return self._format_orders(self._orders_client.list_orders(user_id))
+		if name == "list_contracts":
+			return self._format_contracts(self._orders_client.list_contracts(user_id))
 		raise ValueError(f"Unknown tool call from model: {name!r}")
 
 	def _generate_answer(self, request: str, user_id: str) -> str:
@@ -89,7 +89,7 @@ class ServiceAgent:
 			response = client.chat(
 				model=self._model,
 				messages=messages,
-				tools=[_LIST_TICKETS_TOOL, _LIST_SERVICE_HISTORY_TOOL],
+				tools=[_LIST_ORDERS_TOOL, _LIST_CONTRACTS_TOOL],
 				options={"temperature": 0.1},
 			)
 			message = response["message"]
@@ -107,11 +107,11 @@ class ServiceAgent:
 
 			for call in tool_calls:
 				function = call["function"]
-				logger.info("ServiceAgent calling tool %s() for user=%r", function["name"], user_id)
+				logger.info("OrdersAgent calling tool %s() for user=%r", function["name"], user_id)
 				tool_result = self._call_tool(function["name"], user_id)
 				messages.append({"role": "tool", "content": tool_result})
 
-		raise RuntimeError(f"Service agent exceeded {_MAX_TOOL_ROUNDS} tool-call rounds without a final answer")
+		raise RuntimeError(f"Orders agent exceeded {_MAX_TOOL_ROUNDS} tool-call rounds without a final answer")
 
 	def run(self, state: GraphState) -> GraphState:
 		if not state.get("agent_calls"):
@@ -119,20 +119,20 @@ class ServiceAgent:
 
 		call = state["agent_calls"][-1]
 
-		if call["agent_name"] != "service_agent":
+		if call["agent_name"] != "orders_agent":
 			raise ValueError("The agent name in the state does not match the expected agent name.")
 
 		request = call["agent_request"] or state["request"]
 		user_id = state["user_info"]["user_id"]
-		logger.info("ServiceAgent invoked | request=%r | user_id=%r", request, user_id)
+		logger.info("OrdersAgent invoked | request=%r | user_id=%r", request, user_id)
 		error: str | None = None
 		try:
 			response = self._generate_answer(request, user_id)
 		except Exception as exc:
-			logger.warning("ServiceAgent could not produce a grounded answer", exc_info=True)
-			response = "I'm sorry, I cannot answer that question based on the available service records."
-			error = f"ServiceAgent fell back to a decline response: {exc}"
-		logger.info("ServiceAgent produced answer (%d chars)", len(response))
+			logger.warning("OrdersAgent could not produce a grounded answer", exc_info=True)
+			response = "I'm sorry, I cannot answer that question based on the available order and contract data."
+			error = f"OrdersAgent fell back to a decline response: {exc}"
+		logger.info("OrdersAgent produced answer (%d chars)", len(response))
 
 		call["agent_response"] = response
 		state["response"] = response

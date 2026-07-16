@@ -8,8 +8,8 @@ from collections.abc import Sequence
 
 import ollama
 
-from FleetAssistant.state import GraphState
-from FleetAssistant.tools.query_telemetry import (
+from src.state import GraphState
+from src.tools.query_telemetry import (
 	LocalTelemetryClient,
 	TelemetryClient,
 	TelemetryReading,

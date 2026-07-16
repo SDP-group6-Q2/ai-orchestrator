@@ -1,7 +1,7 @@
 """Compatibility node wrapper around the class-based service agent."""
 
-from FleetAssistant.agents import ServiceAgent
-from FleetAssistant.state import GraphState
+from src.agents import ServiceAgent
+from src.state import GraphState
 
 
 def make_service_agent_node(agent: ServiceAgent | None = None):

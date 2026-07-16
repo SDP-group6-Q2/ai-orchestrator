@@ -6,8 +6,8 @@ from __future__ import annotations
 
 from typing import cast
 
-from FleetAssistant.graph import build_graph
-from FleetAssistant.state import GraphState
+from src.graph import build_graph
+from src.state import GraphState
 
 
 class FleetAssistant:

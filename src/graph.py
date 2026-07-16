@@ -2,7 +2,7 @@
 
 from langgraph.graph import END, StateGraph
 
-from FleetAssistant.agents import (
+from src.agents import (
     FleetOrchestrator,
     IotAgent,
     ManualsAgent,
@@ -10,7 +10,7 @@ from FleetAssistant.agents import (
     ServiceAgent,
     SynthesizerAgent,
 )
-from FleetAssistant.nodes import (
+from src.nodes import (
     make_iot_agent_node,
     make_manuals_agent_node,
     make_orchestrator_node,
@@ -18,7 +18,7 @@ from FleetAssistant.nodes import (
     make_service_agent_node,
     make_synthetizer_node,
 )
-from FleetAssistant.state import GraphState
+from src.state import GraphState
 
 
 def _route_from_orchestrator(state: GraphState) -> str:

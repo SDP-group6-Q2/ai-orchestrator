@@ -8,7 +8,7 @@ import os
 
 import ollama
 
-from FleetAssistant.state import GraphState, PlanStep
+from src.state import GraphState, PlanStep
 
 logger = logging.getLogger(__name__)
 

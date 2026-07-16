@@ -1,7 +1,7 @@
 """Compatibility node wrapper around the class-based manuals agent."""
 
-from FleetAssistant.agents import ManualsAgent
-from FleetAssistant.state import GraphState
+from src.agents import ManualsAgent
+from src.state import GraphState
 
 
 def make_manuals_agent_node(agent: ManualsAgent | None = None):

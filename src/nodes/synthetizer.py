@@ -1,7 +1,7 @@
 """Compatibility node wrapper around the class-based synthesizer."""
 
-from FleetAssistant.agents import SynthesizerAgent
-from FleetAssistant.state import GraphState
+from src.agents import SynthesizerAgent
+from src.state import GraphState
 
 
 def make_synthetizer_node(agent: SynthesizerAgent | None = None):

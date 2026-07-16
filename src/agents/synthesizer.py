@@ -7,7 +7,7 @@ import os
 
 import ollama
 
-from FleetAssistant.state import GraphState
+from src.state import GraphState
 
 logger = logging.getLogger(__name__)
 

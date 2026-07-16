@@ -1,23 +1,23 @@
 """FleetAssistant tools."""
 
-from FleetAssistant.tools.query_orders import (
+from src.tools.query_orders import (
     ContractRecord,
     LocalOrdersClient,
     OrderRecord,
     OrdersClient,
 )
-from FleetAssistant.tools.query_service import (
+from src.tools.query_service import (
     LocalServiceClient,
     ServiceClient,
     ServiceTicket,
     ServiceVisit,
 )
-from FleetAssistant.tools.query_telemetry import (
+from src.tools.query_telemetry import (
     LocalTelemetryClient,
     TelemetryClient,
     TelemetryReading,
 )
-from FleetAssistant.tools.retrieve_manual import (
+from src.tools.retrieve_manual import (
     LocalManualRetriever,
     ManualExcerpt,
     ManualRetriever,

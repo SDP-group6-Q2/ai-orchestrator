@@ -8,8 +8,8 @@ from collections.abc import Sequence
 
 import ollama
 
-from FleetAssistant.state import GraphState
-from FleetAssistant.tools.retrieve_manual import (
+from src.state import GraphState
+from src.tools.retrieve_manual import (
 	LocalManualRetriever,
 	ManualExcerpt,
 	ManualRetriever,

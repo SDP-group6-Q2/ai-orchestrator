@@ -1,7 +1,7 @@
 """Compatibility node wrapper around the class-based orchestrator."""
 
-from FleetAssistant.agents import FleetOrchestrator
-from FleetAssistant.state import GraphState
+from src.agents import FleetOrchestrator
+from src.state import GraphState
 
 
 def make_orchestrator_node(agent: FleetOrchestrator | None = None):

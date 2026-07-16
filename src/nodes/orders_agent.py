@@ -1,7 +1,7 @@
 """Compatibility node wrapper around the class-based orders agent."""
 
-from FleetAssistant.agents import OrdersAgent
-from FleetAssistant.state import GraphState
+from src.agents import OrdersAgent
+from src.state import GraphState
 
 
 def make_orders_agent_node(agent: OrdersAgent | None = None):

@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 import logging
 
-from FleetAssistant import FleetAssistant
+from src import FleetAssistant
 
 
 def _parse_args() -> argparse.Namespace:
