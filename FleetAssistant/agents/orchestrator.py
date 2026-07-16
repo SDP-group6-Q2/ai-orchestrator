@@ -51,6 +51,15 @@ class FleetOrchestrator:
 
 	def _build_history(self, state: GraphState) -> str:
 		lines: list[str] = [f"User request: {state['request']}"]
+
+		plan = state.get("plan", [])
+		if plan:
+			lines.append("Planned steps so far:")
+			for index, step in enumerate(plan, start=1):
+				lines.append(
+					f"Planned {index}: {step['next_node']} | request: {step['agent_request']} | rationale: {step['rationale']}"
+				)
+
 		for index, call in enumerate(state.get("agent_calls", []), start=1):
 			lines.append(f"Step {index} agent request: {call['agent_request']}")
 			if call.get("agent_response"):
