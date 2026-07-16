@@ -1,16 +1,13 @@
 # ai-orchestrator
 
-The AI orchestration layer connecting the AROL Customer Platform backend to the specialized AI agents (Manuals, IoT, Orders, Troubleshooting, Service).
-
-It exposes a single HTTP endpoint that classifies intent, routes to the right agent via a LangGraph graph, and returns the agent's answer.
+The AI orchestration layer connecting the AROL Customer Platform backend to the specialized AI agents (Manuals, IoT, Orders, Service). It is a LangGraph workflow that loops an orchestrator over agent nodes until it has enough grounded evidence to answer.
 
 ## How to run it
 
-1. Install and start [Ollama](https://ollama.com/download), then pull the model used for intent classification:
+1. Install and start [Ollama](https://ollama.com/download), then pull a model that supports tool calling and JSON-schema output (e.g. `llama3.1`, or `llama3.1:cloud` / `gpt-oss:20b-cloud` if using Ollama's cloud tier):
    ```bash
    ollama pull llama3.1
    ```
-   This is optional — `classify_intent` falls back to keyword matching if Ollama isn't running — but required for LLM-based routing.
 2. Create and activate a virtual environment:
    ```bash
    python -m venv venv
@@ -20,28 +17,10 @@ It exposes a single HTTP endpoint that classifies intent, routes to the right ag
    ```bash
    pip install -r requirements.txt
    ```
-4. Start the server:
+4. Run Assistant:
    ```bash
-   uvicorn app.main:app --host 127.0.0.1 --port 8001 --reload
+   python -m src.run_in_terminal
    ```
-5. Check it's up:
-   ```bash
-   curl http://127.0.0.1:8001/health
-   ```
-6. Send a test request:
-   ```bash
-   curl -X POST http://127.0.0.1:8001/orchestrate \
-     -H "Content-Type: application/json" \
-     -d '{
-           "message": "I get an error code E204 on the machine",
-           "user_id": "u1",
-           "customer_id": "c1",
-           "machine_id": "m1",
-           "session_id": "s1"
-         }'
-   ```
-
-The backend runs on port `8000`; the orchestrator runs on `8001`.
 
 ## Architecture
 
@@ -49,43 +28,26 @@ The backend runs on port `8000`; the orchestrator runs on `8001`.
 POST /orchestrate
       |
       v
- classify_intent (LLM-based intent router via Ollama, falls back to keywords)
+ FleetAssistant.run(message, user_id, machine_id)
       |
       v
- conditional routing (selected_agent)
+ orchestrator ⇄ manuals_agent | iot_agent | orders_agent | service_agent   (loops until enough evidence)
       |
       v
- agent node (manuals | iot | orders | troubleshooting | service | general)
+ synthetizer
       |
       v
  response returned to backend
 ```
 
-- `app/main.py` — FastAPI app, exposes `POST /orchestrate` and `GET /health`.
-- `app/graph.py` — builds the LangGraph `StateGraph`: `classify_intent` node, conditional edges to one agent node, then `END`.
-- `app/nodes/classify_intent.py` — router that sets `intent` / `selected_agent` via an Ollama LLM call constrained to a JSON schema; falls back to keyword matching if Ollama is unreachable or returns an invalid response.
-- `app/agents/` — one module per agent (`manuals_agent.py`, `iot_agent.py`, `orders_agent.py`, `troubleshooting_agent.py`, `service_agent.py`). Currently placeholder stubs; will call out to MCP servers / RAG / tools. `general_agent.py` is the exception: it's live, answering greetings and platform questions directly via Ollama (with a static fallback reply if Ollama is unreachable), and is the default when `classify_intent` can't confidently match one of the other five intents.
-- `app/state.py` — shared `OrchestratorState` passed through the graph.
-- `app/schemas.py` — Pydantic request/response models for the API.
-- `app/config.py` — settings (loaded from environment / `.env`), including `ollama_base_url` (default `http://localhost:11434`) and `ollama_model` (default `llama3.1`) used by `classify_intent`.
+## FleetAssistant
 
-## Shared state
+`FleetAssistant` is the class-based LangGraph flow the API above delegates to: an `orchestrator` node loops over `manuals_agent` / `iot_agent` / `orders_agent` / `service_agent` (each grounds its answer via an Ollama tool-calling loop against a swappable backend — local placeholders today, real services/MCP later) until it routes to `synthetizer` for the final answer.
 
-Every node reads/writes a subset of this state:
+To try it directly from a terminal instead of through the FastAPI service:
 
-| Field | Description |
-|---|---|
-| `message` | the user's message |
-| `user_id` | end-user identifier |
-| `customer_id` | AROL customer identifier |
-| `machine_id` | machine the request relates to (optional) |
-| `session_id` | conversation/session identifier |
-| `intent` | classified intent (set by `classify_intent`) |
-| `selected_agent` | agent chosen for this turn (set by `classify_intent`) |
-| `answer` | final answer text (set by the selected agent) |
-| `citations` | list of `{source, snippet}` supporting the answer |
-| `error` | populated if something failed during orchestration |
+INFO-level logs print each orchestrator routing decision and agent tool call as they happen; use `--verbose` to also print the final plan and any recorded error.
 
 ## Status
 
-Agents are currently placeholders that return stub answers and citations, wired end-to-end through the LangGraph router so the API contract and graph structure can be validated before the real agent logic (RAG, MCP tool calls, ERP/CRM/IoT integrations) is implemented.
+`manuals_agent`, `iot_agent`, `orders_agent` and `service_agent` are wired end-to-end against local placeholder backends (in-memory manual corpus, telemetry log, order/contract log, ticket log) so the orchestration logic and tool-calling pattern can be validated before the real backends (RAG, MCP tool calls, ERP/CRM/IoT integrations) are implemented.
