@@ -100,7 +100,9 @@ class IotAgent:
 
 			for call in tool_calls:
 				function = call["function"]
-				tool_result = self._call_tool(function["name"], function.get("arguments") or {}, machine_id)
+				arguments = function.get("arguments") or {}
+				logger.info("IotAgent calling tool %s(%s) for machine=%r", function["name"], arguments, machine_id)
+				tool_result = self._call_tool(function["name"], arguments, machine_id)
 				messages.append({"role": "tool", "content": tool_result})
 
 		raise RuntimeError(f"IoT agent exceeded {_MAX_TOOL_ROUNDS} tool-call rounds without a final answer")
@@ -116,10 +118,19 @@ class IotAgent:
 
 		request = call["agent_request"] or state["request"]
 		machine_id = state["user_info"]["machine_id"]
-		response = self._generate_answer(request, machine_id)
+		logger.info("IotAgent invoked | request=%r | machine_id=%r", request, machine_id)
+		error: str | None = None
+		try:
+			response = self._generate_answer(request, machine_id)
+		except Exception as exc:
+			logger.warning("IotAgent could not produce a grounded answer", exc_info=True)
+			response = "I'm sorry, I cannot answer that question based on the available telemetry."
+			error = f"IotAgent fell back to a decline response: {exc}"
+		logger.info("IotAgent produced answer (%d chars)", len(response))
 
 		call["agent_response"] = response
 		state["response"] = response
 		state["next_node"] = "orchestrator"
+		state["error"] = error
 
 		return state

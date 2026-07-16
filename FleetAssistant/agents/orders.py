@@ -107,6 +107,7 @@ class OrdersAgent:
 
 			for call in tool_calls:
 				function = call["function"]
+				logger.info("OrdersAgent calling tool %s() for user=%r", function["name"], user_id)
 				tool_result = self._call_tool(function["name"], user_id)
 				messages.append({"role": "tool", "content": tool_result})
 
@@ -123,10 +124,19 @@ class OrdersAgent:
 
 		request = call["agent_request"] or state["request"]
 		user_id = state["user_info"]["user_id"]
-		response = self._generate_answer(request, user_id)
+		logger.info("OrdersAgent invoked | request=%r | user_id=%r", request, user_id)
+		error: str | None = None
+		try:
+			response = self._generate_answer(request, user_id)
+		except Exception as exc:
+			logger.warning("OrdersAgent could not produce a grounded answer", exc_info=True)
+			response = "I'm sorry, I cannot answer that question based on the available order and contract data."
+			error = f"OrdersAgent fell back to a decline response: {exc}"
+		logger.info("OrdersAgent produced answer (%d chars)", len(response))
 
 		call["agent_response"] = response
 		state["response"] = response
 		state["next_node"] = "orchestrator"
+		state["error"] = error
 
 		return state

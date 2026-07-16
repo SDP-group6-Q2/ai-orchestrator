@@ -64,6 +64,8 @@ class SynthesizerAgent:
 			return self._fallback_summary(state)
 
 	def run(self, state: GraphState) -> GraphState:
+		logger.info("SynthesizerAgent invoked | %d agent call(s) in history", len(state.get("agent_calls", [])))
 		state["response"] = self._generate_summary(state)
+		logger.info("SynthesizerAgent produced final answer (%d chars)", len(state["response"]))
 		state["next_node"] = ""
 		return state

@@ -111,6 +111,13 @@ class FleetOrchestrator:
 
 	def run(self, state: GraphState) -> GraphState:
 		decision, error = self._decide_next_step(state)
+		logger.info(
+			"Orchestrator step %d -> %s | request=%r | rationale=%r",
+			len(state.get("agent_calls", [])) + 1,
+			decision["next_node"],
+			decision["agent_request"],
+			decision["rationale"],
+		)
 		plan = list(state.get("plan", []))
 		plan.append(decision)
 

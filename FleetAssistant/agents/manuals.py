@@ -100,7 +100,9 @@ class ManualsAgent:
 
 			for call in tool_calls:
 				function = call["function"]
-				tool_result = self._call_tool(function["name"], function.get("arguments") or {})
+				arguments = function.get("arguments") or {}
+				logger.info("ManualsAgent calling tool %s(%s)", function["name"], arguments)
+				tool_result = self._call_tool(function["name"], arguments)
 				messages.append({"role": "tool", "content": tool_result})
 
 		raise RuntimeError(f"Manuals agent exceeded {_MAX_TOOL_ROUNDS} tool-call rounds without a final answer")
@@ -115,10 +117,19 @@ class ManualsAgent:
 			raise ValueError("The agent name in the state does not match the expected agent name.")
 
 		request = call["agent_request"] or state["request"]
-		response = self._generate_answer(request)
+		logger.info("ManualsAgent invoked | request=%r", request)
+		error: str | None = None
+		try:
+			response = self._generate_answer(request)
+		except Exception as exc:
+			logger.warning("ManualsAgent could not produce a grounded answer", exc_info=True)
+			response = "I'm sorry, I cannot answer that question based on the available manuals."
+			error = f"ManualsAgent fell back to a decline response: {exc}"
+		logger.info("ManualsAgent produced answer (%d chars)", len(response))
 
 		call["agent_response"] = response
 		state["response"] = response
 		state["next_node"] = "orchestrator"
+		state["error"] = error
 
 		return state
