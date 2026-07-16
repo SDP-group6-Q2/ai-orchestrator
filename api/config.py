@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     port: int = 8001
 
     ollama_base_url: str = "http://localhost:11434"
-    ollama_model: str = "llama3.1"
+    ollama_model: str = "gpt-oss:20b-cloud"
 
 
 settings = Settings()

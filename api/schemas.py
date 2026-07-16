@@ -8,20 +8,11 @@ from pydantic import BaseModel, Field
 class OrchestrateRequest(BaseModel):
     message: str = Field(..., min_length=1)
     user_id: str
-    customer_id: str
-    machine_id: Optional[str] = None
+    machine_id: str
     session_id: str
-
-
-class Citation(BaseModel):
-    source: str
-    snippet: str
 
 
 class OrchestrateResponse(BaseModel):
     session_id: str
-    intent: str
-    selected_agent: str
-    answer: str
-    citations: list[Citation] = Field(default_factory=list)
+    response: str
     error: Optional[str] = None
