@@ -1,4 +1,4 @@
-"""Class-based orchestrator for the FleetAssistant graph."""
+"""Orchestrator node for the FleetAssistant graph."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ _SYSTEM_PROMPT = (
 	"Your goal, as orchestrator, is to decide which agent node to call next, and what request to send to that agent, acquiring enough information to answer the user request."
 	"Decide which agent to call next based on the user request and the previous agent requests and responses. "
 	"Choose manualsfor questions about documentation, procedures or error-code meanings. "
-	"Choose iotfor questions that need live telemetry or sensor readings from the machine. "
+	"Choose telemetry for questions that need live telemetry or sensor readings from the machine. "
 	"Choose ordersfor questions about order history, shipments or support/service contracts. "
 	"Choose servicefor questions about customer service tickets or past service visits. "
 	"If no agent option is appropriate, decide finish."
@@ -38,14 +38,13 @@ class AgentRequest(BaseModel):
 
 _MAX_PLANNING_ATTEMPTS = 2
 
-class FleetOrchestrator:
-	def __init__(self, llm: BaseChatModel):
-		# function_calling routes through the tool-call API instead of relying on
-		# sampler-level format constraints, which some Ollama cloud models (e.g.
-		# gpt-oss:20b-cloud) silently ignore under method="json_schema".
-		self.structured_llm = llm.with_structured_output(AgentRequest, method="function_calling")
+def make_orchestrator_node(llm: BaseChatModel):
+	# function_calling routes through the tool-call API instead of relying on
+	# sampler-level format constraints, which some Ollama cloud models (e.g.
+	# gpt-oss:20b-cloud) silently ignore under method="json_schema".
+	structured_llm = llm.with_structured_output(AgentRequest, method="function_calling")
 
-	def _build_history(self, state: GraphState) -> str:
+	def _build_history(state: GraphState) -> str:
 		history = {
 			"user_info": state["user_info"],
 			"messages": convert_to_openai_messages(state["messages"]),
@@ -53,18 +52,20 @@ class FleetOrchestrator:
 		}
 		return json.dumps(history, indent=2)
 
-	def _decide_next_step(self, state: GraphState):
+	def _decide_next_step(state: GraphState):
 		if len(state["agent_calls"]) >= _MAX_AGENT_STEPS:
 			return {"agent": "finish", "agent_request": ""}
 
 		messages = [
 			{'role': 'system', 'content': _SYSTEM_PROMPT},
-			{'role': 'user', 'content': self._build_history(state)}
+			{'role': 'user', 'content': _build_history(state)}
 		]
 
 		for attempt in range(1, _MAX_PLANNING_ATTEMPTS + 1):
 			try:
-				response = self.structured_llm.invoke(messages, reasoning=False)
+				response = structured_llm.invoke(messages, reasoning=False)
+				if not isinstance(response, AgentRequest):
+					raise ValueError(f"Orchestrator LLM returned unexpected type: {type(response)}")
 				return {"agent": response.agent, "agent_request": response.agent_request}
 			except Exception as exc:
 				logger.warning(
@@ -74,8 +75,8 @@ class FleetOrchestrator:
 
 		return {"agent": "finish", "agent_request": ""}
 
-	def run(self, state: GraphState) -> GraphState:
-		decision = self._decide_next_step(state)
+	def orchestrator_node(state: GraphState) -> GraphState:
+		decision = _decide_next_step(state)
 
 		logger.info(
 			"Orchestrator step %d -> %s | request=%r ",
@@ -93,3 +94,5 @@ class FleetOrchestrator:
 
 
 		return state
+
+	return orchestrator_node

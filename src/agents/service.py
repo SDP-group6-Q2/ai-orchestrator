@@ -1,4 +1,4 @@
-"""Class-based service agent for FleetAssistant."""
+"""Service agent node for FleetAssistant."""
 
 from __future__ import annotations
 
@@ -6,7 +6,9 @@ import logging
 import os
 from collections.abc import Sequence
 
+from langchain.agents import create_agent
 from langchain_core.language_models import BaseChatModel
+
 import ollama
 
 from src.state import GraphState
@@ -25,21 +27,23 @@ _SYSTEM_PROMPT = (
 )
 
 
-class ServiceAgent:
-	def __init__(self, llm: BaseChatModel):
-		self._llm_with_tools = llm.bind_tools([open_new_ticket, query_service_tickets, get_service_tables_descriptors])
+def make_service_agent_node(llm: BaseChatModel):
+	agent = create_agent(
+		model = llm,
+		tools = [get_service_tables_descriptors, query_service_tickets, open_new_ticket],
+		system_prompt=_SYSTEM_PROMPT,
+	)
 
-	def _generate_answer(self, request: str, machine_id: int) -> str:
+	def _generate_answer(request: str, machine_id: int) -> str:
 		messages = [
-			{"role": "system", "content": _SYSTEM_PROMPT},
 			{"role": "user", "content": request},
 			{"role": "user", "content": "The machine ID is: {}".format(machine_id)},
 		]
-		response = self._llm_with_tools.invoke(messages)
-		logger.info("ServiceAgent generated answer): ", response)
-		return response.content
+		result = agent.invoke({"messages": messages})
+		logger.info("ServiceAgent generated answer: %r", result)
+		return result["messages"][-1].content
 
-	def run(self, state: GraphState) -> GraphState:
+	def service_agent_node(state: GraphState) -> GraphState:
 		call = state["agent_calls"][-1]
 
 		if call["agent_name"] != "service":
@@ -50,7 +54,7 @@ class ServiceAgent:
 		logger.info("ServiceAgent invoked | request=%r", request)
 
 		try:
-			response = self._generate_answer(request, machine_id)
+			response = _generate_answer(request, machine_id)
 		except Exception as exc:
 			logger.warning("ServiceAgent could not produce a grounded answer", exc_info=True)
 			response = "I'm sorry, I cannot answer that question based on the available tickets."
@@ -61,3 +65,5 @@ class ServiceAgent:
 		state["messages"] = [{'role': 'assistant', 'content': response}]
 
 		return state
+
+	return service_agent_node

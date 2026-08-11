@@ -1,4 +1,4 @@
-"""Class-based orders agent for FleetAssistant."""
+"""Orders agent node for FleetAssistant."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import logging
 import os
 from collections.abc import Sequence
 
+from langchain.agents import create_agent
 from langchain_core.language_models import BaseChatModel
 import ollama
 
@@ -24,20 +25,22 @@ _SYSTEM_PROMPT = (
 )
 
 
-class OrdersAgent:
-	def __init__(self, llm: BaseChatModel):
-		self._llm_with_tools = llm.bind_tools([get_orders_info, list_contracts])
+def make_orders_agent_node(llm: BaseChatModel):
+	agent = create_agent(
+		model=llm,
+		tools=[get_orders_info, list_contracts],
+		system_prompt=_SYSTEM_PROMPT,
+	)
 
-	def _generate_answer(self, request: str, user_id: int) -> str:
+	def _generate_answer(request: str, user_id: int) -> str:
 		messages = [
-			{"role": "system", "content": _SYSTEM_PROMPT},
 			{"role": "user", "content": request},
 			{"role": "user", "content": "My user ID is: {}".format(user_id)},
 		]
-		response = self._llm_with_tools.invoke(messages)
-		return response.content
+		result = agent.invoke({"messages": messages})
+		return result["messages"][-1].content
 
-	def run(self, state: GraphState) -> GraphState:
+	def orders_agent_node(state: GraphState) -> GraphState:
 		call = state["agent_calls"][-1]
 
 		if call["agent_name"] != "orders":
@@ -45,11 +48,11 @@ class OrdersAgent:
 
 		request = call["agent_request"]
 		user_id = state["user_info"]["user_id"]
-		
+
 		logger.info("OrdersAgent invoked | request=%r", request)
 
 		try:
-			response = self._generate_answer(request, user_id)
+			response = _generate_answer(request, user_id)
 		except Exception as exc:
 			logger.warning("OrdersAgent could not produce a grounded answer", exc_info=True)
 			response = "I'm sorry, I cannot answer that question based on the available information."
@@ -60,3 +63,5 @@ class OrdersAgent:
 		state["messages"] = [{'role': 'assistant', 'content': response}]
 
 		return state
+
+	return orders_agent_node

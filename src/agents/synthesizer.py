@@ -1,4 +1,4 @@
-"""Class-based final synthesizer for FleetAssistant."""
+"""Final synthesizer node for FleetAssistant."""
 
 from __future__ import annotations
 
@@ -23,13 +23,10 @@ _SYSTEM_PROMPT = (
 )
 
 
-class SynthesizerAgent:
-	def __init__(self, llm: BaseChatModel):
-		self._llm = llm
-
-	def _generate_summary(self, state: GraphState) -> str:
+def make_synthetizer_node(llm: BaseChatModel):
+	def _generate_summary(state: GraphState) -> str:
 		try:
-			response = self._llm.invoke(state["messages"] + [{'role': 'system', 'content': _SYSTEM_PROMPT}])
+			response = llm.invoke(state["messages"] + [{'role': 'system', 'content': _SYSTEM_PROMPT}])
 			content = response.content
 			if not content:
 				raise ValueError("empty response from ollama")
@@ -38,8 +35,10 @@ class SynthesizerAgent:
 			logger.warning("Synthetizer LLM generation failed, using fallback summary", exc_info=True)
 			return "I'm sorry, I cannot provide a grounded answer based on the available information."
 
-	def run(self, state: GraphState) -> GraphState:
+	def synthetizer_node(state: GraphState) -> GraphState:
 		logger.info("SynthesizerAgent invoked | %d agent call(s) in history", len(state.get("agent_calls", [])))
-		response = self._generate_summary(state)
+		response = _generate_summary(state)
 		logger.info("SynthesizerAgent produced final answer (%d chars)", len(response))
 		return {"messages": [{'role': 'system', 'content': response}]}
+
+	return synthetizer_node

@@ -24,7 +24,7 @@ class FleetAssistant:
         
         self._graph = build_graph(llm = self.llm, checkpointer=self._checkpointer).compile(checkpointer=self._checkpointer)
 
-    def run(self, question: str, user_id: str, machine_id: str) -> GraphState:
+    def run(self, question: str, user_id: str, machine_id: int) -> GraphState:
         result = self._graph.invoke(
             {
                 "messages": [{"role": "user", "content": question}],
@@ -35,6 +35,6 @@ class FleetAssistant:
         )
         return cast(GraphState, result)
 
-    def ask(self, question: str, user_id: str, machine_id: str) -> str:
+    def ask(self, question: str, user_id: str, machine_id: int) -> str:
         result = self.run(question, user_id, machine_id)
         return result["messages"][-1].content

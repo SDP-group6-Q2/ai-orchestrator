@@ -4,7 +4,7 @@ from langchain.chat_models import BaseChatModel
 from langgraph.graph import END, StateGraph, START
 from langgraph.checkpoint.memory import InMemorySaver
 
-from src.nodes import (
+from src.agents import (
     make_iot_agent_node,
     make_manuals_agent_node,
     make_orchestrator_node,
@@ -34,7 +34,7 @@ def build_graph(llm: BaseChatModel, checkpointer: InMemorySaver):
         lambda state: state["next_node"],
         {
             "manuals": "manuals_agent",
-            "iot": "iot_agent",
+            "telemetry": "iot_agent",
             "orders": "orders_agent",
             "service": "service_agent",
             "finish": "synthetizer",
