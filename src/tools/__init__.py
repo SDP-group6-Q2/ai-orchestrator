@@ -1,41 +1,25 @@
 """FleetAssistant tools."""
 
-from src.tools.query_orders import (
-    ContractRecord,
-    LocalOrdersClient,
-    OrderRecord,
-    OrdersClient,
+from src.tools.orders_tools import (
+    get_orders_info,
+    list_contracts
 )
-from src.tools.query_service import (
-    LocalServiceClient,
-    ServiceClient,
-    ServiceTicket,
-    ServiceVisit,
+from src.tools.service_tools import (
+    open_new_ticket,
+    query_service_tickets,
 )
-from src.tools.query_telemetry import (
-    LocalTelemetryClient,
-    TelemetryClient,
-    TelemetryReading,
+from src.tools.telemetry_tools import (
+    query_telemetry_readings
 )
-from src.tools.retrieve_manual import (
-    LocalManualRetriever,
-    ManualExcerpt,
-    ManualRetriever,
+from src.tools.manuals_tools import (
+   get_manual_excerpts
 )
 
 __all__ = [
-    "ContractRecord",
-    "LocalManualRetriever",
-    "LocalOrdersClient",
-    "LocalServiceClient",
-    "LocalTelemetryClient",
-    "ManualExcerpt",
-    "ManualRetriever",
-    "OrderRecord",
-    "OrdersClient",
-    "ServiceClient",
-    "ServiceTicket",
-    "ServiceVisit",
-    "TelemetryClient",
-    "TelemetryReading",
+    "get_orders_info",
+    "list_contracts",
+    "open_new_ticket",
+    "query_service_tickets",
+    "query_telemetry_readings",
+    "get_manual_excerpts"
 ]

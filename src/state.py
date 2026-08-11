@@ -1,6 +1,7 @@
 """Shared state for the FleetAssistant LangGraph flow."""
 
-from typing import TypedDict
+from typing import TypedDict, Annotated
+from langgraph.graph.message import add_messages, MessagesState
 
 
 class AgentCallState(TypedDict):
@@ -10,23 +11,12 @@ class AgentCallState(TypedDict):
 
 
 class UserInfoState(TypedDict):
-    user_id: str
-    machine_id: str
-
-
-class PlanStep(TypedDict):
-    next_node: str
-    agent_request: str
-    rationale: str
-
+    user_id: int
+    machine_id: int
 
 class GraphState(TypedDict):
-    request: str
     user_info: UserInfoState
+    messages: Annotated[list, add_messages]
     agent_calls: list[AgentCallState]
-    plan: list[PlanStep]
-    current_step: int
     next_node: str
-    response: str
-    error: str | None
 
