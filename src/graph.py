@@ -4,14 +4,6 @@ from langchain.chat_models import BaseChatModel
 from langgraph.graph import END, StateGraph, START
 from langgraph.checkpoint.memory import InMemorySaver
 
-from src.agents import (
-    FleetOrchestrator,
-    IotAgent,
-    ManualsAgent,
-    OrdersAgent,
-    ServiceAgent,
-    SynthesizerAgent,
-)
 from src.nodes import (
     make_iot_agent_node,
     make_manuals_agent_node,
@@ -29,12 +21,12 @@ def build_graph(llm: BaseChatModel, checkpointer: InMemorySaver):
 
     builder = StateGraph(GraphState)
 
-    builder.add_node("orchestrator", make_orchestrator_node(FleetOrchestrator(llm=llm)))
-    builder.add_node("manuals_agent", make_manuals_agent_node(ManualsAgent(llm=llm)))
-    builder.add_node("iot_agent", make_iot_agent_node(IotAgent(llm=llm)))
-    builder.add_node("orders_agent", make_orders_agent_node(OrdersAgent(llm=llm)))
-    builder.add_node("service_agent", make_service_agent_node(ServiceAgent(llm=llm)))
-    builder.add_node("synthetizer", make_synthetizer_node(SynthesizerAgent(llm=llm)))
+    builder.add_node("orchestrator", make_orchestrator_node(llm))
+    builder.add_node("manuals_agent", make_manuals_agent_node(llm))
+    builder.add_node("iot_agent", make_iot_agent_node(llm))
+    builder.add_node("orders_agent", make_orders_agent_node(llm))
+    builder.add_node("service_agent", make_service_agent_node(llm))
+    builder.add_node("synthetizer", make_synthetizer_node(llm))
 
     builder.add_edge(START, "orchestrator")
     builder.add_conditional_edges(

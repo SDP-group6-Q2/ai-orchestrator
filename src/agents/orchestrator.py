@@ -67,11 +67,10 @@ class FleetOrchestrator:
 		decision = self._decide_next_step(state)
 
 		logger.info(
-			"Orchestrator step %d -> %s | request=%r | rationale=%r",
+			"Orchestrator step %d -> %s | request=%r ",
 			len(state.get("agent_calls", [])) + 1,
-			decision["next_node"],
-			decision["agent_request"],
-			decision["rationale"],
+			decision["agent"],
+			decision["agent_request"]
 		)
 
 		state["next_node"] = decision["agent"]

@@ -10,12 +10,13 @@ from langchain_core.language_models import BaseChatModel
 import ollama
 
 from src.state import GraphState
-from src.tools import (open_new_ticket, query_service_tickets)
+from src.tools import (open_new_ticket, query_service_tickets, get_service_tables_descriptors)
 
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
 	"You are the customer service agent for FleetAssistant. "
+	"Use the get_service_tables_descriptors tool to understand the structure of the service tickets data before querying it."
 	"Call query_service_tickets to fetch the user's open and past support tickets. "
 	"If necessary, ask the user for more information, and then call open_new_ticket to create a new support ticket, upon confirmation from user."
 	"Answer only once you have grounded evidence from the tools. "
@@ -26,7 +27,7 @@ _SYSTEM_PROMPT = (
 
 class ServiceAgent:
 	def __init__(self, llm: BaseChatModel):
-		self._llm_with_tools = llm.bind_tools([open_new_ticket, query_service_tickets])
+		self._llm_with_tools = llm.bind_tools([open_new_ticket, query_service_tickets, get_service_tables_descriptors])
 
 	def _generate_answer(self, request: str, machine_id: int) -> str:
 		messages = [

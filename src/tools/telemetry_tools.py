@@ -6,29 +6,41 @@ from langchain_core.tools import tool
 import duckdb
 
 TELEMETRY_READINGS_DDL = """
-    CREATE TABLE telemetry_readings (
-        machine_id VARCHAR,
+    CREATE TABLE IF NOT EXISTS telemetry_readings (
+        machine_id INTEGER,
         sensor1_reading DOUBLE,
         sensor2_reading DOUBLE,
         timestamp TIMESTAMP
     );
+    COMMENT ON COLUMN telemetry_readings.machine_id IS 'The ID of the machine associated with the telemetry reading';
+    COMMENT ON COLUMN telemetry_readings.sensor1_reading IS 'The reading from sensor 1';
+    COMMENT ON COLUMN telemetry_readings.sensor2_reading IS 'The reading from sensor 2';
+    COMMENT ON COLUMN telemetry_readings.timestamp IS 'The date and time when the reading was recorded';
 """
 
 MOCK_READINGS = """
+    TRUNCATE TABLE telemetry_readings;
     INSERT INTO telemetry_readings (machine_id, sensor1_reading, sensor2_reading, timestamp) VALUES
-        ('machine_1', 10.5, 20.1, '2024-06-01 10:00:00'),
-        ('machine_1', 11.0, 19.8, '2024-06-01 10:05:00'),
-        ('machine_2', 9.8, 21.0, '2024-06-01 10:00:00'),
-        ('machine_2', 10.2, 20.5, '2024-06-01 10:05:00');
+        (1, 10.5, 20.1, '2024-06-01 10:00:00'),
+        (1, 11.0, 19.8, '2024-06-01 10:05:00'),
+        (2, 9.8, 21.0, '2024-06-01 10:00:00'),
+        (2, 10.2, 20.5, '2024-06-01 10:05:00');
 """
 
-con = duckdb.connect("mock_readings.db")
+con = duckdb.connect("mock_data.db")
 con.sql(TELEMETRY_READINGS_DDL)
 con.sql(MOCK_READINGS)
 
 @tool
+def get_telemetry_tables_descriptors():
+    """Return the table descriptors for the telemetry readings database."""
+    return {
+        "telemetry_readings": TELEMETRY_READINGS_DDL
+    }
+
+@tool
 def query_telemetry_readings(sql_query) -> list[dict]:
-    f"""Using an SQL statement, query telemetry readings for a given machine and optional metric. The table description is as follows: {TELEMETRY_READINGS_DDL}"""
+    """Using an SQL statement, query telemetry readings for a given machine and optional metric."""
 
     try:
         statements = con.extract_statements(sql_query)

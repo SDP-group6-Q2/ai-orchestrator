@@ -9,13 +9,14 @@ from collections.abc import Sequence
 from langchain.chat_models import BaseChatModel
 
 from src.state import GraphState
-from src.tools import query_telemetry_readings
+from src.tools import (query_telemetry_readings, get_telemetry_tables_descriptors)
 
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
 	"You are the IoT telemetry agent for FleetAssistant. "
-	"Call the query_telemetry_readings tool with an SQL query to fetch live sensor readings for the user's machine "
+	"Use the get_telemetry_tables_descriptors tool to understand the structure of the telemetry data before querying it."
+	"Call the query_telemetry_readings tool with an SQL query to fetch live sensor readings for the user's machine."
 	"before responding; call it again with a different query if you need more data. "
 	"Answer only once you have grounded evidence from the tool. "
 	"If no telemetry data is relevant, say you cannot answer the question based on the available readings. "
@@ -24,7 +25,7 @@ _SYSTEM_PROMPT = (
 
 class IotAgent:
 	def __init__(self, llm: BaseChatModel):
-		self._llm_with_tools = llm.bind_tools([query_telemetry_readings])
+		self._llm_with_tools = llm.bind_tools([query_telemetry_readings, get_telemetry_tables_descriptors])
 
 	# TODO: Evaluate truthfulness of the answer executing same SQL queries and comparing the results with the answer
 	def _generate_answer(self, request: str, machine_id: int) -> str:

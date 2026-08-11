@@ -40,7 +40,7 @@ def _run_once(assistant: FleetAssistant, question: str, user_id: str, machine_id
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     args = _parse_args()
-    assistant = FleetAssistant(llama_model=args.model, llama_base_url=args.base_url)
+    assistant = FleetAssistant(model=args.model, llama_base_url=args.base_url)
 
     if args.question:
         _run_once(assistant, args.question, args.user_id, args.machine_id, args.verbose)

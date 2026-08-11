@@ -17,6 +17,6 @@ class UserInfoState(TypedDict):
 class GraphState(TypedDict):
     user_info: UserInfoState
     messages: Annotated[list, add_messages]
-    agent_calls: list[AgentCallState]
+    agent_calls: list[AgentCallState] # TODO: maybe can use similar structure to messages (annotated list) to make it more generic and reusable
     next_node: str
 

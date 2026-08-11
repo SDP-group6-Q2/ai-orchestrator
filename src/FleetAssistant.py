@@ -29,6 +29,7 @@ class FleetAssistant:
             {
                 "messages": [{"role": "user", "content": question}],
                 "user_info": {"user_id": user_id, "machine_id": machine_id},
+                "agent_calls": [],
             },
             config=self.config
         )
