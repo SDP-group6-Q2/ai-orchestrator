@@ -26,8 +26,8 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _run_once(assistant: FleetAssistant, question: str, user_id: str, machine_id: str, verbose: bool) -> None:
-    result = assistant.run(question, user_id=user_id, machine_id=machine_id)
-    print(f"\n{result.get('response', '')}\n")
+    result = assistant.ask(question, user_id=user_id, machine_id=machine_id)
+    print(f"\nAssistant: {result}\n")
 
     if verbose:
         print("--- plan ---")

@@ -1,9 +1,12 @@
 """Service ticket and history retrieval helpers used by the service agent."""
 
 from __future__ import annotations
+import logging
 
 from langchain_core.tools import tool
 import duckdb
+
+logger = logging.getLogger(__name__)
 
 TICKETS_DDL = """
     CREATE TABLE  IF NOT EXISTS tickets (
@@ -45,6 +48,8 @@ def get_service_tables_descriptors():
 def query_service_tickets(sql_query) -> list[dict]:
     """Using an SQL statement, query service tickets."""
 
+    logger.info("Querying service tickets with SQL: %s", sql_query)
+
     try:
         statements = con.extract_statements(sql_query)
     except Exception as e:
@@ -66,6 +71,7 @@ def query_service_tickets(sql_query) -> list[dict]:
 @tool
 def open_new_ticket(machine_id: int, description: str) -> str:
 	"""Open a new service ticket for a given machine with a description."""
+	logger.info("Opening new service ticket for machine %d with description: %s", machine_id, description)
 	con.sql(f"""
 		INSERT INTO tickets (date, machine_id, status, client_reported_description, technician_notes)
 		VALUES (CURRENT_TIMESTAMP, {machine_id}, 'open', '{description}', '');

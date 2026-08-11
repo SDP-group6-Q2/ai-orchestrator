@@ -36,6 +36,7 @@ class ServiceAgent:
 			{"role": "user", "content": "The machine ID is: {}".format(machine_id)},
 		]
 		response = self._llm_with_tools.invoke(messages)
+		logger.info("ServiceAgent generated answer): ", response)
 		return response.content
 
 	def run(self, state: GraphState) -> GraphState:

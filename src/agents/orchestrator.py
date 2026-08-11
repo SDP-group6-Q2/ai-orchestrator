@@ -7,6 +7,7 @@ import logging
 import os
 
 from langchain.chat_models import BaseChatModel
+from langchain_core.messages import convert_to_openai_messages
 from langchain_ollama import ChatOllama
 from pydantic import BaseModel, Field
 from typing import TypedDict, Annotated, Literal
@@ -23,26 +24,31 @@ _SYSTEM_PROMPT = (
 	"The goal is to provide informed answers to client questions about their machines, using internal documentation and tools."
 	"Your goal, as orchestrator, is to decide which agent node to call next, and what request to send to that agent, acquiring enough information to answer the user request."
 	"Decide which agent to call next based on the user request and the previous agent requests and responses. "
-	"Choose manuals_agent for questions about documentation, procedures or error-code meanings. "
-	"Choose iot_agent for questions that need live telemetry or sensor readings from the machine. "
-	"Choose orders_agent for questions about order history, shipments or support/service contracts. "
-	"Choose service_agent for questions about customer service tickets or past service visits. "
+	"Choose manualsfor questions about documentation, procedures or error-code meanings. "
+	"Choose iotfor questions that need live telemetry or sensor readings from the machine. "
+	"Choose ordersfor questions about order history, shipments or support/service contracts. "
+	"Choose servicefor questions about customer service tickets or past service visits. "
 	"If no agent option is appropriate, decide finish."
 	"When choosing an agent, write agent request to be as specific as possible. "
 )
 
 class AgentRequest(BaseModel):
-	agent: Literal['telemetry', 'manuals', 'orders', 'service', 'finish'] = Field(..., description="The next step of workflow, classified into one of the available agents.")
+	agent: Literal['telemetry', 'manuals', 'orders', 'service', 'finish'] = Field(..., description="The next step of workflow, classified into one of the available agents: telemetry, manuals, orders, service, or finish.")
 	agent_request: str = Field(..., description="The request to send to the next agent.")
+
+_MAX_PLANNING_ATTEMPTS = 2
 
 class FleetOrchestrator:
 	def __init__(self, llm: BaseChatModel):
+		# function_calling routes through the tool-call API instead of relying on
+		# sampler-level format constraints, which some Ollama cloud models (e.g.
+		# gpt-oss:20b-cloud) silently ignore under method="json_schema".
 		self.structured_llm = llm.with_structured_output(AgentRequest, method="function_calling")
 
 	def _build_history(self, state: GraphState) -> str:
 		history = {
 			"user_info": state["user_info"],
-			"messages": state["messages"],
+			"messages": convert_to_openai_messages(state["messages"]),
 			"agent_calls": state["agent_calls"],
 		}
 		return json.dumps(history, indent=2)
@@ -51,17 +57,22 @@ class FleetOrchestrator:
 		if len(state["agent_calls"]) >= _MAX_AGENT_STEPS:
 			return {"agent": "finish", "agent_request": ""}
 
-		try:
-			response = self.structured_llm.invoke([
-				{'role': 'system', 'content': _SYSTEM_PROMPT},
-				{'role': 'user', 'content': self._build_history(state)}
-			])
+		messages = [
+			{'role': 'system', 'content': _SYSTEM_PROMPT},
+			{'role': 'user', 'content': self._build_history(state)}
+		]
 
-			return {"agent": response.agent, "agent_request": response.agent_request}
+		for attempt in range(1, _MAX_PLANNING_ATTEMPTS + 1):
+			try:
+				response = self.structured_llm.invoke(messages, reasoning=False)
+				return {"agent": response.agent, "agent_request": response.agent_request}
+			except Exception as exc:
+				logger.warning(
+					"Orchestrator LLM planning failed (attempt %d/%d).",
+					attempt, _MAX_PLANNING_ATTEMPTS, exc_info=True
+				)
 
-		except Exception as exc:
-			logger.warning("Orchestrator LLM planning failed.", exc_info=True)
-			return {"agent": "finish", "agent_request": ""}
+		return {"agent": "finish", "agent_request": ""}
 
 	def run(self, state: GraphState) -> GraphState:
 		decision = self._decide_next_step(state)
