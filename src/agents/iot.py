@@ -1,15 +1,13 @@
-"""IoT telemetry agent node for FleetAssistant."""
+"""IoT telemetry specialist tool for FleetAssistant."""
 
 from __future__ import annotations
 
 import logging
-import os
-from collections.abc import Sequence
 
 from langchain.agents import create_agent
 from langchain.chat_models import BaseChatModel
+from langchain_core.tools import tool
 
-from src.state import GraphState
 from src.tools import (query_telemetry_readings, get_telemetry_tables_descriptors)
 
 logger = logging.getLogger(__name__)
@@ -24,7 +22,7 @@ _SYSTEM_PROMPT = (
 	"Keep the answer concise and practical."
 )
 
-def make_iot_agent_node(llm: BaseChatModel):
+def make_iot_tool(llm: BaseChatModel):
 	agent = create_agent(
 		model=llm,
 		tools=[query_telemetry_readings, get_telemetry_tables_descriptors],
@@ -32,36 +30,23 @@ def make_iot_agent_node(llm: BaseChatModel):
 	)
 
 	# TODO: Evaluate truthfulness of the answer executing same SQL queries and comparing the results with the answer
-	def _generate_answer(request: str, machine_id: int) -> str:
+	@tool
+	def iot_agent(request: str, machine_id: int) -> str:
+		"""Ask the IoT telemetry specialist about live sensor readings, error states, cycle counts, or the operational health of a specific machine. Always pass the machine_id from the current conversation context."""
+		logger.info("IotAgent invoked | request=%r machine_id=%r", request, machine_id)
+
 		messages = [
 			{"role": "user", "content": request},
 			{"role": "user", "content": "The machine ID is: {}".format(machine_id)},
 		]
-		result = agent.invoke({"messages": messages})
-		return result["messages"][-1].content
-
-	def iot_agent_node(state: GraphState) -> GraphState:
-		call = state["agent_calls"][-1]
-
-		if call["agent_name"] != "telemetry":
-			raise ValueError("The agent name in the state does not match the expected agent name.")
-
-		request = call["agent_request"]
-		machine_id = state["user_info"]["machine_id"]
-
-		logger.info("IotAgent invoked | request=%r", request)
-
 		try:
-			response = _generate_answer(request, machine_id)
-		except Exception as exc:
+			result = agent.invoke({"messages": messages})
+			response = result["messages"][-1].content
+		except Exception:
 			logger.warning("IotAgent could not produce a grounded answer", exc_info=True)
 			response = "I'm sorry, I cannot answer that question based on the available telemetry."
 
 		logger.info("IotAgent produced answer: %s", response)
+		return response
 
-		call["agent_response"] = response
-		state["messages"] = [{'role': 'assistant', 'content': response}]
-
-		return state
-
-	return iot_agent_node
+	return iot_agent

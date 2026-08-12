@@ -1,17 +1,15 @@
-"""FleetAssistant graph node factories."""
+"""FleetAssistant agents: a supervisor and its specialist tools."""
 
-from src.agents.iot import make_iot_agent_node
-from src.agents.manuals import make_manuals_agent_node
-from src.agents.orchestrator import make_orchestrator_node
-from src.agents.orders import make_orders_agent_node
-from src.agents.service import make_service_agent_node
-from src.agents.synthesizer import make_synthetizer_node
+from src.agents.iot import make_iot_tool
+from src.agents.manuals import make_manuals_tool
+from src.agents.orders import make_orders_tool
+from src.agents.service import make_service_tool
+from src.agents.supervisor import make_supervisor_agent
 
 __all__ = [
-    "make_iot_agent_node",
-    "make_manuals_agent_node",
-    "make_orchestrator_node",
-    "make_orders_agent_node",
-    "make_service_agent_node",
-    "make_synthetizer_node",
+    "make_iot_tool",
+    "make_manuals_tool",
+    "make_orders_tool",
+    "make_service_tool",
+    "make_supervisor_agent",
 ]

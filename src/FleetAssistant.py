@@ -22,14 +22,15 @@ class FleetAssistant:
         self._checkpointer = InMemorySaver()
         self.config = {"configurable": {"thread_id": uuid.uuid4()}}
         
-        self._graph = build_graph(llm = self.llm, checkpointer=self._checkpointer).compile(checkpointer=self._checkpointer)
+        self._graph = build_graph(llm = self.llm, checkpointer=self._checkpointer)
 
     def run(self, question: str, user_id: str, machine_id: int) -> GraphState:
         result = self._graph.invoke(
             {
-                "messages": [{"role": "user", "content": question}],
-                "user_info": {"user_id": user_id, "machine_id": machine_id},
-                "agent_calls": [],
+                "messages": [
+                    {"role": "user", "content": f"[context] user_id={user_id}; machine_id={machine_id}"},
+                    {"role": "user", "content": question},
+                ],
             },
             config=self.config
         )

@@ -1,17 +1,13 @@
-"""Service agent node for FleetAssistant."""
+"""Service specialist tool for FleetAssistant."""
 
 from __future__ import annotations
 
 import logging
-import os
-from collections.abc import Sequence
 
 from langchain.agents import create_agent
 from langchain_core.language_models import BaseChatModel
+from langchain_core.tools import tool
 
-import ollama
-
-from src.state import GraphState
 from src.tools import (open_new_ticket, query_service_tickets, get_service_tables_descriptors)
 
 logger = logging.getLogger(__name__)
@@ -27,43 +23,30 @@ _SYSTEM_PROMPT = (
 )
 
 
-def make_service_agent_node(llm: BaseChatModel):
+def make_service_tool(llm: BaseChatModel):
 	agent = create_agent(
-		model = llm,
-		tools = [get_service_tables_descriptors, query_service_tickets, open_new_ticket],
+		model=llm,
+		tools=[get_service_tables_descriptors, query_service_tickets, open_new_ticket],
 		system_prompt=_SYSTEM_PROMPT,
 	)
 
-	def _generate_answer(request: str, machine_id: int) -> str:
+	@tool
+	def service_agent(request: str, machine_id: int) -> str:
+		"""Ask the customer service specialist about support tickets or past service visits for a specific machine, or to open a new ticket. Always pass the machine_id from the current conversation context."""
+		logger.info("ServiceAgent invoked | request=%r machine_id=%r", request, machine_id)
+
 		messages = [
 			{"role": "user", "content": request},
 			{"role": "user", "content": "The machine ID is: {}".format(machine_id)},
 		]
-		result = agent.invoke({"messages": messages})
-		logger.info("ServiceAgent generated answer: %r", result)
-		return result["messages"][-1].content
-
-	def service_agent_node(state: GraphState) -> GraphState:
-		call = state["agent_calls"][-1]
-
-		if call["agent_name"] != "service":
-			raise ValueError("The agent name in the state does not match the expected agent name.")
-
-		request = call["agent_request"]
-		machine_id = state["user_info"]["machine_id"]
-		logger.info("ServiceAgent invoked | request=%r", request)
-
 		try:
-			response = _generate_answer(request, machine_id)
-		except Exception as exc:
+			result = agent.invoke({"messages": messages})
+			response = result["messages"][-1].content
+		except Exception:
 			logger.warning("ServiceAgent could not produce a grounded answer", exc_info=True)
 			response = "I'm sorry, I cannot answer that question based on the available tickets."
 
 		logger.info("ServiceAgent produced answer (%d chars)", len(response))
+		return response
 
-		call["agent_response"] = response
-		state["messages"] = [{'role': 'assistant', 'content': response}]
-
-		return state
-
-	return service_agent_node
+	return service_agent

@@ -1,18 +1,13 @@
-"""Manuals RAG agent node for FleetAssistant."""
+"""Manuals RAG specialist tool for FleetAssistant."""
 
 from __future__ import annotations
 
 import logging
-import os
-from collections.abc import Sequence
 
 from langchain.agents import create_agent
 from langchain_core.language_models import BaseChatModel
-from langgraph.graph.message import add_messages, MessagesState
+from langchain_core.tools import tool
 
-import ollama
-
-from src.state import GraphState
 from src.tools import get_manual_excerpts
 
 logger = logging.getLogger(__name__)
@@ -26,7 +21,7 @@ _SYSTEM_PROMPT = (
 	"If no manual content is relevant, say you cannot answer the question based on the available manuals."
 )
 
-def make_manuals_agent_node(llm: BaseChatModel):
+def make_manuals_tool(llm: BaseChatModel):
 	agent = create_agent(
 		model=llm,
 		tools=[get_manual_excerpts],
@@ -34,34 +29,22 @@ def make_manuals_agent_node(llm: BaseChatModel):
 	)
 
 	# TODO: Make this a RAG instead of a LLM with tooling
-	def _generate_answer(request: str) -> str:
+	@tool
+	def manuals_agent(request: str) -> str:
+		"""Ask the manuals specialist about documentation, procedures, or error-code meanings."""
+		logger.info("ManualsAgent invoked | request=%r", request)
+
 		messages = [
 			{"role": "user", "content": request},
 		]
-		result = agent.invoke({"messages": messages})
-		return result["messages"][-1].content
-
-	def manuals_agent_node(state: GraphState) -> GraphState:
-		call = state["agent_calls"][-1]
-
-		if call["agent_name"] != "manuals":
-			raise ValueError("The agent name in the state does not match the expected agent name.")
-
-		request = call["agent_request"]
-
-		logger.info("ManualsAgent invoked | request=%r", request)
-
 		try:
-			response = _generate_answer(request)
-		except Exception as exc:
+			result = agent.invoke({"messages": messages})
+			response = result["messages"][-1].content
+		except Exception:
 			logger.warning("ManualsAgent could not produce a grounded answer", exc_info=True)
 			response = "I'm sorry, I cannot answer that question based on the available manuals."
 
 		logger.info("ManualsAgent produced answer (%d chars)", len(response))
+		return response
 
-		call["agent_response"] = response
-		state["messages"] = [{'role': 'assistant', 'content': response}]
-
-		return state
-
-	return manuals_agent_node
+	return manuals_agent
