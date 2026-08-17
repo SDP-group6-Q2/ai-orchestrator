@@ -30,6 +30,7 @@ _CHUNK_SIZE = 1000
 _CHUNK_OVERLAP = 200
 
 _TOP_K = 5
+_MIN_VALID_CHARS = 20
 
 _embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(model_name=_EMBEDDING_MODEL)
 _client = chromadb.PersistentClient(path=str(_CHROMA_DIR))
@@ -95,6 +96,15 @@ def _get_or_build_collection(serial_number: str):
     return collection
 
 
+def _is_valid_excerpt(document: str, metadata: dict) -> bool:
+    """Reject empty/garbage retrieval results (e.g. from a scanned or malformed page)."""
+    if not document or len(document.strip()) < _MIN_VALID_CHARS:
+        return False
+    if "source" not in metadata or "page" not in metadata:
+        return False
+    return True
+
+
 @tool
 def get_manual_excerpts(query: str, machine_id: str) -> str:
     """Retrieve the manual excerpts most relevant to a query, for a specific machine."""
@@ -119,8 +129,14 @@ def get_manual_excerpts(query: str, machine_id: str) -> str:
     documents = results.get("documents") or [[]]
     metadatas = results.get("metadatas") or [[]]
 
-    excerpts = [
-        f"- {meta['source']} (page {meta['page']}): {doc}"
+    valid_pairs = [
+        (doc, meta)
         for doc, meta in zip(documents[0], metadatas[0])
+        if _is_valid_excerpt(doc, meta)
     ]
-    return "\n".join(excerpts) if excerpts else "No relevant manual excerpts were found for that query."
+    if not valid_pairs:
+        logger.warning("get_manual_excerpts: no valid excerpts for machine_id=%s query=%r", machine_id, query)
+        return "No relevant manual excerpts were found for that query."
+
+    excerpts = [f"- {meta['source']} (page {meta['page']}): {doc}" for doc, meta in valid_pairs]
+    return "\n".join(excerpts)
