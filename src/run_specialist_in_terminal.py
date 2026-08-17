@@ -42,6 +42,18 @@ def _build_tool(specialist: str, llm: ChatOllama):
     return spec["factory"](llm), spec
 
 
+def _build_request(history: list[tuple[str, str]], question: str) -> str:
+    if not history:
+        return question
+
+    transcript = "\n".join(f"User: {q}\nAssistant: {a}" for q, a in history)
+    return (
+        "Here is the conversation so far:\n"
+        f"{transcript}\n\n"
+        f"Now answer the user's new message: {question}"
+    )
+
+
 def _call_specialist(tool, spec: dict, request: str, user_id: str, machine_id: int) -> str:
     tool_input = {"request": request}
     if spec["needs_user_id"]:
@@ -51,8 +63,10 @@ def _call_specialist(tool, spec: dict, request: str, user_id: str, machine_id: i
     return tool.invoke(tool_input)
 
 
-def _run_once(tool, spec: dict, request: str, user_id: str, machine_id: int) -> None:
+def _run_once(tool, spec: dict, history: list[tuple[str, str]], question: str, user_id: str, machine_id: int) -> None:
+    request = _build_request(history, question)
     response = _call_specialist(tool, spec, request, user_id, machine_id)
+    history.append((question, response))
     print(f"\n{response}\n")
 
 
@@ -62,9 +76,10 @@ def main() -> None:
 
     llm = ChatOllama(model=args.model, base_url=args.base_url)
     tool, spec = _build_tool(args.specialist, llm)
+    history: list[tuple[str, str]] = []
 
     if args.question:
-        _run_once(tool, spec, args.question, args.user_id, args.machine_id)
+        _run_once(tool, spec, history, args.question, args.user_id, args.machine_id)
         return
 
     print(f"FleetAssistant '{args.specialist}' specialist local session. Type 'exit' or 'quit' to stop.\n")
@@ -80,7 +95,7 @@ def main() -> None:
         if request.lower() in {"exit", "quit"}:
             break
 
-        _run_once(tool, spec, request, args.user_id, args.machine_id)
+        _run_once(tool, spec, history, request, args.user_id, args.machine_id)
 
 
 if __name__ == "__main__":
