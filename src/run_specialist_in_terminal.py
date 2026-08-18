@@ -14,15 +14,15 @@ import logging
 
 from langchain_ollama import ChatOllama
 
-from src.agents import make_iot_tool, make_manuals_tool, make_orders_tool, make_service_tool
+from src.agents import make_technical_tool, make_manuals_tool, make_orders_tool, make_diagnostics_tool
 
 logger = logging.getLogger(__name__)
 
 _SPECIALISTS = {
     "manuals": {"factory": make_manuals_tool, "args": []},
-    "iot": {"factory": make_iot_tool, "args": ["machine_id"]},
+    "technical": {"factory": make_technical_tool, "args": ["machine_id"]},
     "orders": {"factory": make_orders_tool, "args": ["user_id"]},
-    "service": {"factory": make_service_tool, "args": ["machine_id"]},
+    "diagnostics": {"factory": make_diagnostics_tool, "args": ["machine_id"]},
 }
 
 

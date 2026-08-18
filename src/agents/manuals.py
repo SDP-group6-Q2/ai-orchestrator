@@ -34,6 +34,8 @@ def make_manuals_tool(llm: BaseChatModel):
 		"""Ask the manuals specialist about documentation, procedures, or error-code meanings."""
 		logger.info("ManualsAgent invoked | request=%r", request)
 
+		return "For now, I cannot answer this question because the manuals agent is not yet implemented."
+
 		messages = [
 			{"role": "user", "content": request},
 		]

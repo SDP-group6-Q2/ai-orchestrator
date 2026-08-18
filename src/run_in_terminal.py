@@ -21,6 +21,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--machine-id", default=1, type=int, help="Machine id to attach to the request.")
     parser.add_argument("--model", default="gpt-oss:20b-cloud", help="Ollama model name.")
     parser.add_argument("--base-url", default="http://localhost:11434", help="Ollama server base URL.")
+    parser.add_argument("--single-agent", action="store_true", help="Chat a single agent instead of full architecture.")
     return parser.parse_args()
 
 

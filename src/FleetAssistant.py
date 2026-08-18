@@ -12,6 +12,8 @@ from typing import cast
 from src.graph import build_graph
 from src.state import GraphState
 
+from src.tools import (create_telemetry_tables, create_service_tables)
+
 from langgraph.checkpoint.memory import InMemorySaver
 
 
@@ -23,6 +25,10 @@ class FleetAssistant:
         self.config = {"configurable": {"thread_id": uuid.uuid4()}}
         
         self._graph = build_graph(llm = self.llm, checkpointer=self._checkpointer)
+
+        create_telemetry_tables()
+        create_service_tables()
+
 
     def run(self, question: str, user_id: str, machine_id: int) -> GraphState:
         result = self._graph.invoke(

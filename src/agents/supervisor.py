@@ -24,10 +24,10 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
-from src.agents.iot import make_iot_tool
+from src.agents.diagnostics import make_diagnostics_tool
 from src.agents.manuals import make_manuals_tool
 from src.agents.orders import make_orders_tool
-from src.agents.service import make_service_tool
+from src.agents.technical import make_technical_tool
 
 logger = logging.getLogger(__name__)
 
@@ -98,9 +98,9 @@ def _require_tool_grounding(state, runtime):
 def make_supervisor_agent(llm: BaseChatModel, checkpointer: BaseCheckpointSaver | None = None):
 	tools = [
 		make_manuals_tool(llm),
-		make_iot_tool(llm),
+		make_technical_tool(llm),
 		make_orders_tool(llm),
-		make_service_tool(llm),
+		make_diagnostics_tool(llm),
 	]
 
 	return create_agent(
