@@ -27,8 +27,7 @@ _SYSTEM_PROMPT = (
 	"Use the get_service_tables_descriptors tool to understand the structure of the service tickets data before querying it."
 	"Use query_service_tickets to fetch the user's open and past support tickets. "
 	
-	"Answer only once you have grounded evidence from the tool. "
-	"If no telemetry data is relevant, say you cannot answer the question based on the available readings. "
+	"Answer only once you have grounded evidence from the tool, using, when possible, both diagnostics data and manuals retrieved information. "
 	"Keep the answer concise and practical."
 )
 

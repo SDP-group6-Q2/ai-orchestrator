@@ -19,11 +19,12 @@ _SYSTEM_PROMPT = (
 	"Use the get_telemetry_tables_descriptors tool to understand the structure of the telemetry data before querying it."
 	"Use query_telemetry_readings as the primary data source for telemetry analysis, enabling predictive analysis, health monitoring, and autonomous diagnostics."
 
-
-	"Before responding; call it again with a different query if you need more data. "
+	"Before responding, make all relevant queries to provide growding data for a technical expert. "
 	"Answer only once you have grounded evidence from the tool. "
+
 	"If no telemetry data is relevant, say you cannot answer the question based on the available readings. "
-	"Keep the answer concise and practical."
+	"Do not include technical interpretation or conclusion to presented data, only provide the data itself."
+	"Keep the answer concise and practical, providing necessary data."
 )
 
 def make_diagnostics_tool(llm: BaseChatModel):

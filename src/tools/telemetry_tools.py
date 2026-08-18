@@ -1,6 +1,7 @@
 """Telemetry retrieval helpers used by the IoT agent."""
 
 from __future__ import annotations
+import logging
 
 from langchain_core.tools import tool
 import duckdb
@@ -8,17 +9,16 @@ import pandas as pd
 
 from src.tools.db import get_db
 
+logger = logging.getLogger(__name__)
+
 
 def create_telemetry_tables():
     telemetry_df = pd.read_excel("data/AROL_Q2_synthetic_fleet_dataset.xlsx", sheet_name="TelemetrySnapshots")
     alarms_df = pd.read_excel("data/AROL_Q2_synthetic_fleet_dataset.xlsx", sheet_name="Alarms")
 
     with get_db() as con:
-        con.sql("TRUNCATE TABLE telemetry_readings;")
-        con.sql("TRUNCATE TABLE alarms;")
-
-        con.sql("CREATE TABLE IF NOT EXISTS telemetry_readings AS SELECT * FROM telemetry_df")
-        con.sql("CREATE TABLE IF NOT EXISTS alarms AS SELECT * FROM alarms_df")
+        con.sql("CREATE OR REPLACE TABLE telemetry_readings AS SELECT * FROM telemetry_df")
+        con.sql("CREATE OR REPLACE TABLE alarms AS SELECT * FROM alarms_df")
 
 @tool
 def get_telemetry_tables_descriptors():
@@ -40,19 +40,24 @@ def query_telemetry_readings(sql_query) -> list[dict]:
         try:
             statements = con.extract_statements(sql_query)
         except Exception as e:
-            raise ValueError(f"Invalid SQL query: {e}")
+            logger.warning("Invalid SQL query %r: %s", sql_query, e)
+            return [{"error": f"Invalid SQL query: {e}"}]
 
         # 1. Prevent empty strings or multi-statement injections (e.g., "SELECT 1; DROP TABLE users;")
         if len(statements) != 1:
-            raise ValueError("Invalid Query: Exactly one SQL statement is allowed.")
+            return [{"error": "Invalid Query: Exactly one SQL statement is allowed."}]
 
         # 2. Check the statement type explicitly
         # DuckDB StatementTypes include: SELECT, INSERT, ALTER, DROP, etc.
         statement = statements[0]
         if statement.type != duckdb.StatementType.SELECT:
-            raise ValueError(f"Security Alert: Disallowed operation type '{statement.type.name}'. Only SELECT queries are permitted.")
+            return [{"error": f"Security Alert: Disallowed operation type '{statement.type.name}'. Only SELECT queries are permitted."}]
 
         # 3. Safe to execute if it passes the checks
-        result = con.sql(sql_query).df().to_dict(orient="records")
+        try:
+            result = con.sql(sql_query).df().to_dict(orient="records")
+        except duckdb.Error as e:
+            logger.warning("Query execution failed for %r: %s", sql_query, e)
+            return [{"error": f"Query execution failed: {e}"}]
 
     return result

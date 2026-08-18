@@ -16,8 +16,7 @@ def create_service_tables():
     tickets_df = pd.read_excel("data/AROL_Q2_synthetic_fleet_dataset.xlsx", sheet_name="MaintenanceTickets")
 
     with get_db() as con:
-        con.sql("TRUNCATE TABLE tickets;")
-        con.sql("CREATE TABLE IF NOT EXISTS tickets AS SELECT * FROM tickets_df")
+        con.sql("CREATE OR REPLACE TABLE tickets AS SELECT * FROM tickets_df")
 
 
 @tool
@@ -40,20 +39,25 @@ def query_service_tickets(sql_query) -> list[dict]:
         try:
             statements = con.extract_statements(sql_query)
         except Exception as e:
-            raise ValueError(f"Invalid SQL query: {e}")
+            logger.warning("Invalid SQL query %r: %s", sql_query, e)
+            return [{"error": f"Invalid SQL query: {e}"}]
 
         # 1. Prevent empty strings or multi-statement injections (e.g., "SELECT 1; DROP TABLE users;")
         if len(statements) != 1:
-            raise ValueError("Invalid Query: Exactly one SQL statement is allowed.")
+            return [{"error": "Invalid Query: Exactly one SQL statement is allowed."}]
 
         # 2. Check the statement type explicitly
         # DuckDB StatementTypes include: SELECT, INSERT, ALTER, DROP, etc.
         statement = statements[0]
         if statement.type != duckdb.StatementType.SELECT:
-            raise ValueError(f"Security Alert: Disallowed operation type '{statement.type.name}'. Only SELECT queries are permitted.")
+            return [{"error": f"Security Alert: Disallowed operation type '{statement.type.name}'. Only SELECT queries are permitted."}]
 
         # 3. Safe to execute if it passes the checks
-        result = con.sql(sql_query).df().to_dict(orient="records")
+        try:
+            result = con.sql(sql_query).df().to_dict(orient="records")
+        except duckdb.Error as e:
+            logger.warning("Query execution failed for %r: %s", sql_query, e)
+            return [{"error": f"Query execution failed: {e}"}]
 
     return result
 
@@ -64,14 +68,17 @@ def open_new_ticket(machine_id: int, description: str) -> str:
 	"""Open a new service ticket for a given machine with a description."""
      
 	logger.info("Opening new service ticket for machine %d with description: %s", machine_id, description)
-	with get_db() as con:
-		con.execute(
-			"""
-			INSERT INTO tickets (date, machine_id, status, client_reported_description, technician_notes)
-			VALUES (CURRENT_TIMESTAMP, ?, 'open', ?, '');
-			""",
-			[machine_id, description],
-		)
+	try:
+		with get_db() as con:
+			con.execute(
+				"""
+				INSERT INTO tickets (date, machine_id, status, client_reported_description, technician_notes)
+				VALUES (CURRENT_TIMESTAMP, ?, 'open', ?, '');
+				""",
+				[machine_id, description],
+			)
+	except duckdb.Error as e:
+		logger.warning("Failed to open service ticket for machine %d: %s", machine_id, e)
+		return f"Error: could not open service ticket for machine {machine_id}: {e}"
 
-     
 	return f"New service ticket opened for machine {machine_id} with description: '{description}'"
