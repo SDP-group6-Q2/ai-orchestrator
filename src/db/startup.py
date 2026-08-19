@@ -50,6 +50,7 @@ def load_from_excel(engine):
             print("Creating table for sheet:", sheet_name)
             df = pd.read_excel(xls, sheet_name=sheet_name)
             table_name = sheet_name.lower()  # Convert to lowercase for table name
+            df.columns = df.columns.str.lower()  # Avoid quoted mixed-case columns Postgres folds unquoted SQL away from
             df.to_sql(table_name, engine, if_exists='replace', index=False)
             print(f"Data from sheet '{sheet_name}' inserted into table '{table_name}'.")
 
