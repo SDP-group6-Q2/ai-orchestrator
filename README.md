@@ -17,7 +17,22 @@ The AI orchestration layer connecting the AROL Customer Platform backend to the 
    ```bash
    pip install -r requirements.txt
    ```
-4. Run Assistant:
+4. Start a [PostgreSQL](https://www.postgresql.org/download/) server, then copy `.env.example` to `.env` and fill in your credentials:
+   ```bash
+   cp .env.example .env
+   ```
+   | Variable | Description | Default |
+   | --- | --- | --- |
+   | `POSTGRES_USER` | Postgres username | `your_username` |
+   | `POSTGRES_PASSWORD` | Postgres password | `your_password` |
+   | `POSTGRES_HOST` | Postgres host | `localhost` |
+   | `POSTGRES_PORT` | Postgres port | `5432` |
+   | `ASSISTANT_DB` | Database name to create/use for the assistant | `postgres` |
+5. Create the database and load the fleet dataset (`data/AROL_Q2_synthetic_fleet_dataset.xlsx`) into it:
+   ```bash
+   python -m src.db.startup
+   ```
+6. Run Assistant:
    ```bash
    python -m src.run_in_terminal
    ```
