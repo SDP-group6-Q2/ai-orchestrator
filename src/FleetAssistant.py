@@ -13,6 +13,7 @@ from src.graph import build_graph
 from src.state import GraphState
 
 from langgraph.checkpoint.memory import InMemorySaver
+from langchain.messages import HumanMessage
 
 
 class FleetAssistant:
@@ -27,12 +28,10 @@ class FleetAssistant:
     def run(self, question: str, user_id: str, machine_id: int) -> GraphState:
         result = self._graph.invoke(
             {
-                "messages": [
-                    {"role": "user", "content": f"[context] user_id={user_id}; machine_id={machine_id}"},
-                    {"role": "user", "content": question},
-                ],
-            },
-            config=self.config
+                "messages": [HumanMessage(content=question)],
+                "user": {"user_id": user_id, "machine_id": machine_id},
+            }, # type: ignore
+            config=self.config # type: ignore
         )
         return cast(GraphState, result)
 
