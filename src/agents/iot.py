@@ -31,7 +31,7 @@ def make_iot_tool(llm: BaseChatModel):
 
 	# TODO: Evaluate truthfulness of the answer executing same SQL queries and comparing the results with the answer
 	@tool
-	def iot_agent(request: str, machine_id: int) -> str:
+	def iot_agent(request: str, machine_id: str) -> str:
 		"""Ask the IoT telemetry specialist about live sensor readings, error states, cycle counts, or the operational health of a specific machine. Always pass the machine_id from the current conversation context."""
 		logger.info("IotAgent invoked | request=%r machine_id=%r", request, machine_id)
 

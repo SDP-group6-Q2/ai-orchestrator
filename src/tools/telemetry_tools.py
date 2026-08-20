@@ -7,7 +7,7 @@ import duckdb
 
 TELEMETRY_READINGS_DDL = """
     CREATE TABLE IF NOT EXISTS telemetry_readings (
-        machine_id INTEGER,
+        machine_id VARCHAR(10),
         sensor1_reading DOUBLE,
         sensor2_reading DOUBLE,
         timestamp TIMESTAMP
@@ -21,10 +21,10 @@ TELEMETRY_READINGS_DDL = """
 MOCK_READINGS = """
     TRUNCATE TABLE telemetry_readings;
     INSERT INTO telemetry_readings (machine_id, sensor1_reading, sensor2_reading, timestamp) VALUES
-        (1, 10.5, 20.1, '2024-06-01 10:00:00'),
-        (1, 11.0, 19.8, '2024-06-01 10:05:00'),
-        (2, 9.8, 21.0, '2024-06-01 10:00:00'),
-        (2, 10.2, 20.5, '2024-06-01 10:05:00');
+        ('1', 10.5, 20.1, '2024-06-01 10:00:00'),
+        ('1', 11.0, 19.8, '2024-06-01 10:05:00'),
+        ('2', 9.8, 21.0, '2024-06-01 10:00:00'),
+        ('2', 10.2, 20.5, '2024-06-01 10:05:00');
 """
 
 con = duckdb.connect("mock_data.db")

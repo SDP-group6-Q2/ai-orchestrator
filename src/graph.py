@@ -37,7 +37,7 @@ _ROUTER_SYSTEM_PROMPT = (
 )
 
 class Route(BaseModel):
-    intent: Literal["technical", "commercial", "out_of_scope"] = Field(None, description="The next step in the routing process")
+    intent: Literal["technical", "commercial", "out_of_scope"] = Field(None, description="The next step in the routing process") # type: ignore
 
 
 def build_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):
