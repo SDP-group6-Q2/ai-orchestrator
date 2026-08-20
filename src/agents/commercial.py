@@ -2,8 +2,6 @@ from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langchain.agents import create_agent
 
-_logger = logging.getLogger(__name__)
-
 _SYSTEM_PROMPT = (
 	"You are a commercial support agent for AROL capping machines. For now, reply every request saying that you have no capability yet"
 )
