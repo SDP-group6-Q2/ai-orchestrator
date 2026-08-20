@@ -22,7 +22,10 @@ _SYSTEM_PROMPT = (
 	"Use the manuals_agent to ask technical questions about the machine's operation, maintenance, or troubleshooting."
 	"Use the get_service_tables_descriptors tool to understand the structure of the service tickets data before querying it."
 	"Use query_service_tickets to fetch the user's open and past support tickets. "
-	
+
+	"The user_id and machine_id for the current conversation are given to you in a system message at the start of the thread. "
+	"Always use that machine_id for tool calls unless the user explicitly names a different machine; never ask the user for information already provided this way. "
+
 	"Answer only once you have grounded evidence from the tool, using, when possible, both diagnostics data and manuals retrieved information. "
 	"Keep the answer concise and practical."
 )

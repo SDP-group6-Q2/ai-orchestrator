@@ -14,7 +14,7 @@ import logging
 
 from langchain_ollama import ChatOllama
 
-from src.agents import make_technical_tool, make_manuals_tool, make_orders_tool, make_diagnostics_tool, make_commercial_agent, make_technical_agent
+from src.agents import make_manuals_tool, make_orders_tool, make_diagnostics_tool, make_commercial_agent, make_technical_agent
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,6 @@ logger = logging.getLogger(__name__)
 # returning a string directly. `args` lists which extra kwargs they expect.
 _TOOLS = {
     "manuals": {"factory": make_manuals_tool, "args": []},
-    "technical": {"factory": make_technical_tool, "args": ["machine_id"]},
     "orders": {"factory": make_orders_tool, "args": ["user_id"]},
     "diagnostics": {"factory": make_diagnostics_tool, "args": ["machine_id"]},
 }

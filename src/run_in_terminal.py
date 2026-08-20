@@ -18,7 +18,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run FleetAssistant locally from the terminal.")
     parser.add_argument("--question", help="Single question to ask, then exit. Omit to start an interactive session.")
     parser.add_argument("--user-id", default="local-user", help="User id to attach to the request.")
-    parser.add_argument("--machine-id", default=1, type=int, help="Machine id to attach to the request.")
+    parser.add_argument("--machine-id", default="MCH-0001", type=str, help="Machine id to attach to the request.")
     parser.add_argument("--model", default="gpt-oss:20b-cloud", help="Ollama model name.")
     parser.add_argument("--base-url", default="http://localhost:11434", help="Ollama server base URL.")
     parser.add_argument("--single-agent", action="store_true", help="Chat a single agent instead of full architecture.")
@@ -26,7 +26,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 
-def _run_once(assistant: FleetAssistant, question: str, user_id: str, machine_id: int) -> None:
+def _run_once(assistant: FleetAssistant, question: str, user_id: str, machine_id: str) -> None:
     result = assistant.ask(question, user_id=user_id, machine_id=machine_id)
     print(f"\nAssistant: {result}\n")
 
