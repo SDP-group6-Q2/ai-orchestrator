@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 @tool
-def get_orders_descriptors():
-    """Return the table descriptors for the orders database."""
+def get_quotes_descriptors():
+    """Return the table descriptors for the quotes database."""
     with get_db() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -22,9 +22,9 @@ def get_orders_descriptors():
                 WHERE table_name = %s
                 ORDER BY ordinal_position;
                 """,
-                ("orders",),
+                ("quotes",),
             )
-            orders_descriptors = [dict(row) for row in cursor.fetchall()]
+            tickets_descriptors = [dict(row) for row in cursor.fetchall()]
 
             cursor.execute(
                 """
@@ -33,20 +33,33 @@ def get_orders_descriptors():
                 WHERE table_name = %s
                 ORDER BY ordinal_position;
                 """,
-                ("orderlines",),
+                ("quoterevisions",),
             )
-            orderlines_descriptors = [dict(row) for row in cursor.fetchall()]
+            quoterevisions_descriptors = [dict(row) for row in cursor.fetchall()]
+
+
+            cursor.execute(
+                """
+                SELECT column_name, data_type
+                FROM information_schema.columns
+                WHERE table_name = %s
+                ORDER BY ordinal_position;
+                """,
+                ("quotelines",),
+            )
+            quotelines_descriptors = [dict(row) for row in cursor.fetchall()]
 
             return {
-                "orders": orders_descriptors,
-                "orderlines": orderlines_descriptors
+                "quotes": tickets_descriptors,
+                "quoterevisions": quoterevisions_descriptors,
+                "quotelines": quotelines_descriptors
             }
 
 @tool
-def query_orders(sql_query) -> list[dict]:
-    """Based on orders tables descriptors, using an SQL statement, query orders."""
+def query_quotes(sql_query) -> list[dict]:
+    """Based on quote tables descriptors, using an SQL statement, query quotes."""
 
-    logger.info("Querying orders with SQL: %s", sql_query)
+    logger.info("Querying quotes with SQL: %s", sql_query)
 
     # 1. Prevent empty strings or multi-statement injections (e.g., "SELECT 1; DROP TABLE users;")
     statements = [s for s in sqlparse.parse(sql_query) if s.token_first(skip_cm=True) is not None]
