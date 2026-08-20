@@ -1,14 +1,10 @@
-"""Technical specialist tool for FleetAssistant."""
-
 from __future__ import annotations
 
 import logging
 
 from langchain.agents import create_agent
 from langchain.chat_models import BaseChatModel
-from langchain_core.tools import tool
-from langchain_protocol import Annotated, TypedDict
-from langgraph.graph import add_messages
+from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from src.agents.manuals import make_manuals_tool
 from src.agents.diagnostics import make_diagnostics_tool
@@ -31,10 +27,7 @@ _SYSTEM_PROMPT = (
 	"Keep the answer concise and practical."
 )
 
-class TechnicalGraphState(TypedDict):
-    messages: Annotated[list, add_messages]
-
-def make_technical_tool(llm: BaseChatModel):
+def make_technical_agent(llm: BaseChatModel, checkpointer: BaseCheckpointSaver | None = None):
 	tools = [
         make_manuals_tool(llm),
         make_diagnostics_tool(llm),
@@ -46,26 +39,7 @@ def make_technical_tool(llm: BaseChatModel):
 		model=llm,
 		tools=tools,
 		system_prompt=_SYSTEM_PROMPT,
+		checkpointer=checkpointer,
 	)
 
-	@tool
-	def technical_agent(request: str, machine_id: str) -> str:
-		"""Ask the technical specialist about live sensor readings, error states, cycle counts, or the operational health of a specific machine. Always pass the machine_id from the current conversation context."""
-		logger.info("TechnicalAgent invoked | request=%r machine_id=%r", request, machine_id)
-
-        # should pass full history
-		messages = [
-			{"role": "user", "content": request},
-			{"role": "user", "content": "The machine ID is: {}".format(machine_id)},
-		]
-		try:
-			result = agent.invoke({"messages": messages})
-			response = result["messages"][-1].content
-		except Exception:
-			logger.warning("TechnicalAgent could not produce a grounded answer", exc_info=True)
-			response = "I'm sorry, I cannot answer that question based on the available data."
-
-		logger.info("TechnicalAgent produced answer: %s", response)
-		return response
-
-	return technical_agent
+	return agent

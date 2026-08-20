@@ -14,21 +14,32 @@ import logging
 
 from langchain_ollama import ChatOllama
 
-from src.agents import make_technical_tool, make_manuals_tool, make_orders_tool, make_diagnostics_tool
+from src.agents import make_technical_tool, make_manuals_tool, make_orders_tool, make_diagnostics_tool, make_commercial_agent, make_technical_agent
 
 logger = logging.getLogger(__name__)
 
-_SPECIALISTS = {
+# Tools: plain LangChain @tool callables, invoked with a flat kwargs dict and
+# returning a string directly. `args` lists which extra kwargs they expect.
+_TOOLS = {
     "manuals": {"factory": make_manuals_tool, "args": []},
     "technical": {"factory": make_technical_tool, "args": ["machine_id"]},
     "orders": {"factory": make_orders_tool, "args": ["user_id"]},
     "diagnostics": {"factory": make_diagnostics_tool, "args": ["machine_id"]},
 }
 
+# Agents: compiled LangGraph agents (from create_agent), invoked with a
+# {"messages": [...]} payload and returning {"messages": [...]}.
+_AGENTS = {
+    "technical": {"factory": make_technical_agent},
+    "commercial": {"factory": make_commercial_agent},
+}
+
+_SPECIALISTS = sorted(set(_TOOLS) | set(_AGENTS))
+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a single FleetAssistant specialist locally, without the supervisor.")
-    parser.add_argument("specialist", choices=sorted(_SPECIALISTS), help="Which specialist agent to call.")
+    parser.add_argument("specialist", choices=_SPECIALISTS, help="Which specialist agent to call.")
     parser.add_argument("--question", help="Single request to send, then exit. Omit to start an interactive session.")
     parser.add_argument("--user-id", default="USR-001", help="User id to pass, for specialists that need it (orders).")
     parser.add_argument("--machine-id", default="MCH-0001", help="Machine id to pass, for specialists that need it (iot, service).")
@@ -38,9 +49,29 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _build_tool(specialist: str, llm: ChatOllama):
-    spec = _SPECIALISTS[specialist]
-    return spec["factory"](llm), spec
+def _build_caller(specialist: str, llm: ChatOllama):
+    """Build a `request -> answer` callable for either a tool or an agent specialist."""
+    if specialist in _TOOLS:
+        spec = _TOOLS[specialist]
+        tool = spec["factory"](llm)
+        arg_names = spec["args"]
+
+        def call(request: str, *, user_id: str, machine_id: str, company_id: str) -> str:
+            tool_input = {"request": request}
+            available = {"user_id": user_id, "machine_id": machine_id, "company_id": company_id}
+            for name in arg_names:
+                tool_input[name] = available[name]
+            return tool.invoke(tool_input)
+
+        return call
+
+    agent = _AGENTS[specialist]["factory"](llm)
+
+    def call(request: str, **_context) -> str:
+        result = agent.invoke({"messages": [{"role": "user", "content": request}]})
+        return result["messages"][-1].content
+
+    return call
 
 
 def _build_request(history: list[tuple[str, str]], question: str) -> str:
@@ -55,17 +86,9 @@ def _build_request(history: list[tuple[str, str]], question: str) -> str:
     )
 
 
-def _call_specialist(tool, spec: dict, request: str, user_id: str, machine_id: str, company_id: str) -> str:
-    tool_input = {"request": request}
-    available = {"user_id": user_id, "machine_id": machine_id, "company_id": company_id}
-    for arg in spec["args"]:
-        tool_input[arg] = available[arg]
-    return tool.invoke(tool_input)
-
-
-def _run_once(tool, spec: dict, history: list[tuple[str, str]], question: str, user_id: str, machine_id: str, company_id: str) -> None:
+def _run_once(caller, history: list[tuple[str, str]], question: str, user_id: str, machine_id: str, company_id: str) -> None:
     request = _build_request(history, question)
-    response = _call_specialist(tool, spec, request, user_id, machine_id, company_id)
+    response = caller(request, user_id=user_id, machine_id=machine_id, company_id=company_id)
     history.append((question, response))
     print(f"\n{response}\n")
 
@@ -75,11 +98,11 @@ def main() -> None:
     args = _parse_args()
 
     llm = ChatOllama(model=args.model, base_url=args.base_url)
-    tool, spec = _build_tool(args.specialist, llm)
+    caller = _build_caller(args.specialist, llm)
     history: list[tuple[str, str]] = []
 
     if args.question:
-        _run_once(tool, spec, history, args.question, args.user_id, args.machine_id, args.company_id)
+        _run_once(caller, history, args.question, args.user_id, args.machine_id, args.company_id)
         return
 
     print(f"FleetAssistant '{args.specialist}' specialist local session. Type 'exit' or 'quit' to stop.\n")
@@ -95,7 +118,7 @@ def main() -> None:
         if request.lower() in {"exit", "quit"}:
             break
 
-        _run_once(tool, spec, history, request, args.user_id, args.machine_id, args.company_id)
+        _run_once(caller, history, request, args.user_id, args.machine_id, args.company_id)
 
 
 if __name__ == "__main__":
