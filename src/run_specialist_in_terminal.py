@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Tools: plain LangChain @tool callables, invoked with a flat kwargs dict and
 # returning a string directly. `args` lists which extra kwargs they expect.
 _TOOLS = {
-    "manuals": {"factory": make_manuals_tool, "args": ["machine_id", "company_id"]},
+    "manuals": {"factory": make_manuals_tool, "args": ["machine_id"]},
     "orders": {"factory": make_orders_tool, "args": ["user_id"]},
     "diagnostics": {"factory": make_diagnostics_tool, "args": ["machine_id"]},
 }

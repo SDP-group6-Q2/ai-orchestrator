@@ -20,12 +20,12 @@ logger = logging.getLogger(__name__)
 
 def make_manuals_tool(llm: BaseChatModel):
 	@tool
-	def manuals_agent(request: str, machine_id: str, company_id: str) -> str:
-		"""Ask the manuals specialist about documentation, procedures, or error-code meanings for a specific machine. Always pass the machine_id and company_id from the current conversation context."""
+	def manuals_agent(request: str, machine_id: str) -> str:
+		"""Ask the manuals specialist about documentation, procedures, or error-code meanings for a specific machine. Always pass the machine_id from the current conversation context."""
 		query = request.strip()
-		logger.info("ManualsAgent invoked | query=%r machine_id=%r company_id=%r", query, machine_id, company_id)
+		logger.info("ManualsAgent invoked | query=%r machine_id=%r", query, machine_id)
 
-		response = get_manual_excerpts.invoke({"query": query, "machine_id": machine_id, "company_id": company_id})
+		response = get_manual_excerpts.invoke({"query": query, "machine_id": machine_id})
 
 		logger.info("ManualsAgent produced answer (%d chars)", len(response))
 		return response

@@ -7,6 +7,7 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from sqlalchemy import create_engine
 
 from src.db.db import get_credentials
+from src.tools.manuals_tools import index_all_manuals
 
 def create_database(dbname, user, password, host, port):
     # Connect to the default database
@@ -111,6 +112,10 @@ def main():
     )
 
     load_from_excel(engine)
+
+    print("Indexing manuals for the fleet (this may take a while)...")
+    index_all_manuals()
+    print("Manuals indexed.")
 
 
 if "__main__" == "__main__":

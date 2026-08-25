@@ -23,11 +23,12 @@ from pypdf import PdfReader
 from sentence_transformers import CrossEncoder, SentenceTransformer
 
 from src.db.db import get_db
-from src.tools.fleet_directory import MACHINE_TO_COMPANY, MACHINE_TO_SERIAL
+from src.tools.fleet_directory import machine_lookup
 
 logger = logging.getLogger(__name__)
 
 _MANUALS_DIR = Path(__file__).resolve().parents[2] / "data" / "manuals"
+_MANUAL_FILENAME_SUFFIX = "_manual_EN.pdf"
 _EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 _RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
@@ -68,12 +69,8 @@ def _chunk_text(text: str, chunk_size: int = _CHUNK_SIZE, overlap: int = _CHUNK_
     return chunks
 
 
-def _load_manual_chunks(serial_number: str) -> list[tuple[str, int]]:
+def _load_manual_chunks(pdf_path: Path) -> list[tuple[str, int]]:
     """Returns (chunk_text, page_number) pairs for a manual's PDF."""
-    pdf_path = _MANUALS_DIR / f"{serial_number}_manual_EN.pdf"
-    if not pdf_path.exists():
-        raise FileNotFoundError(f"No manual found for serial number {serial_number!r} at {pdf_path}")
-
     reader = PdfReader(str(pdf_path))
     chunks: list[tuple[str, int]] = []
     for page_number, page in enumerate(reader.pages, start=1):
@@ -92,10 +89,9 @@ def _is_indexed(conn, company_id: str, machine_id: str) -> bool:
         return cur.fetchone() is not None
 
 
-def _index_manual(conn, company_id: str, machine_id: str, serial_number: str) -> None:
-    pdf_path = _MANUALS_DIR / f"{serial_number}_manual_EN.pdf"
+def _index_manual(conn, company_id: str, machine_id: str, serial_number: str, pdf_path: Path) -> None:
     logger.info("Indexing manual for machine_id %s (first run, this may take a while)...", machine_id)
-    chunks = _load_manual_chunks(serial_number)
+    chunks = _load_manual_chunks(pdf_path)
     if not chunks:
         logger.warning("Manual for machine_id %s produced no extractable text", machine_id)
         return
@@ -125,35 +121,63 @@ def _index_manual(conn, company_id: str, machine_id: str, serial_number: str) ->
     logger.info("Indexed %d chunks for machine_id %s", len(chunks), machine_id)
 
 
+def index_all_manuals() -> None:
+    """Eagerly index every manual PDF found under data/manuals (idempotent -- skips already-indexed ones).
+
+    Driven by what's actually on disk, not by the machines table: each
+    "{serial_number}_manual_EN.pdf" file is matched back to its owning machine(s) via
+    a serial_number lookup, so a machine with no PDF yet is simply never indexed (no
+    wasted per-machine lookup/failure), and a PDF with no matching machine is reported
+    and skipped. Called from src/db/startup.py so indexing cost is paid at setup time,
+    not on the first live query for a machine (get_manual_excerpts is read-only).
+    """
+    conn = _get_connection()
+    try:
+        for pdf_path in sorted(_MANUALS_DIR.glob(f"*{_MANUAL_FILENAME_SUFFIX}")):
+            serial_number = pdf_path.name[: -len(_MANUAL_FILENAME_SUFFIX)]
+
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT machineid, companyid FROM machines WHERE serialnumber = %s;",
+                    (serial_number,),
+                )
+                matches = cur.fetchall()
+
+            if not matches:
+                logger.warning("Manual %s has no matching machine (serial_number=%r)", pdf_path.name, serial_number)
+                continue
+
+            for row in matches:
+                machine_id, company_id = row["machineid"], row["companyid"]
+                if _is_indexed(conn, company_id, machine_id):
+                    continue
+                _index_manual(conn, company_id, machine_id, serial_number, pdf_path)
+    finally:
+        conn.close()
+
+
 def _is_valid_excerpt(content: str) -> bool:
     """Reject empty/garbage retrieval results (e.g. from a scanned or malformed page)."""
     return bool(content) and len(content.strip()) >= _MIN_VALID_CHARS
 
 
 @tool
-def get_manual_excerpts(query: str, machine_id: str, company_id: str) -> str:
-    """Retrieve the manual excerpts most relevant to a query, for a specific machine at a specific company."""
-    # TODO: MACHINE_TO_SERIAL / MACHINE_TO_COMPANY are hardcoded stopgaps.
-    # Replace with a real lookup (backend API/DB) once one exists.
-    # TODO: no visibility-tier check here -- only company_id tenant scoping.
-    # A commercial-only user should still be denied manuals of a company they
-    # don't belong to (handled below), but visibility tiers (technician/full)
-    # aren't enforced at all yet.
-    expected_company = MACHINE_TO_COMPANY.get(machine_id)
-    serial_number = MACHINE_TO_SERIAL.get(machine_id)
-    if serial_number is None or expected_company is None:
+def get_manual_excerpts(query: str, machine_id: str) -> str:
+    """Retrieve the manual excerpts most relevant to a query, for a specific machine."""
+    # TODO: no visibility-tier check here -- only company_id tenant scoping (implicit,
+    # since company_id is derived from machine_id below, not attacker/LLM-controlled).
+    # A commercial-only user should still be denied manuals of a company they don't
+    # belong to; visibility tiers (technician/full) aren't enforced at all yet.
+    machine = machine_lookup(machine_id)
+    if machine is None:
         return f"No manual is registered for machine_id {machine_id}."
-    if company_id != expected_company:
-        return f"machine_id {machine_id} does not belong to company_id {company_id}."
+    company_id = machine["company_id"]
 
     conn = _get_connection()
     try:
         if not _is_indexed(conn, company_id, machine_id):
-            try:
-                _index_manual(conn, company_id, machine_id, serial_number)
-            except FileNotFoundError as exc:
-                logger.warning("Manual lookup failed: %s", exc)
-                return str(exc)
+            logger.warning("get_manual_excerpts: machine_id=%s has not been indexed yet", machine_id)
+            return f"The manual for machine_id {machine_id} has not been indexed yet. Run the fleet indexing step (src/db/startup.py) to make it available."
 
         query_embedding = _embedder.encode(query)
 

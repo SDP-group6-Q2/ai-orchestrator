@@ -1,36 +1,32 @@
 """Real machine / company / user identity relationships from the Project-Q2-Database dataset.
 
-Hardcoded from data/AROL_Q2_synthetic_fleet_dataset.xlsx (Machines, Users sheets)
-rather than read at runtime, matching how the other tool modules hardcode their
-mock data. This is the real fleet, not mock data -- it exists so tools can resolve
-between id spaces (machineId, companyId, userId, serialNumber) that are all
-distinct in the dataset. Access-control (visibility) enforcement using this data
-belongs in an upstream identity/visibility-check step, which does not exist yet.
+Machine <-> company/serial resolution (`machine_lookup`) queries the fleet
+Postgres DB directly (same `machines` table `fleet_tools.py` queries). User
+<-> company/visibility data below is still hardcoded from
+data/AROL_Q2_synthetic_fleet_dataset.xlsx (Users sheet), matching how the other
+tool modules hardcode their mock data, pending a real lookup for that side too.
+Access-control (visibility) enforcement using this data belongs in an upstream
+identity/visibility-check step, which does not exist yet.
 """
 
 from __future__ import annotations
 
-MACHINE_TO_COMPANY: dict[str, str] = {
-    "MCH-0001": "CMP-001",
-    "MCH-0002": "CMP-001",
-    "MCH-0003": "CMP-001",
-    "MCH-0004": "CMP-003",
-    "MCH-0005": "CMP-003",
-    "MCH-0006": "CMP-004",
-    "MCH-0007": "CMP-002",
-    "MCH-0008": "CMP-002",
-}
+from src.db.db import get_db
 
-MACHINE_TO_SERIAL: dict[str, str] = {
-    "MCH-0001": "15610",
-    "MCH-0002": "17203",
-    "MCH-0003": "17579",
-    "MCH-0004": "17478",
-    "MCH-0005": "A4344",
-    "MCH-0006": "A2064",
-    "MCH-0007": "A2055",
-    "MCH-0008": "A2132",
-}
+
+def machine_lookup(machine_id: str) -> dict[str, str] | None:
+    """Look up a machine's company_id and serial_number from the fleet DB."""
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                "SELECT companyid, serialnumber FROM machines WHERE machineid = %s;",
+                (machine_id,),
+            )
+            row = cursor.fetchone()
+    if row is None:
+        return None
+    return {"company_id": row["companyid"], "serial_number": row["serialnumber"]}
+
 
 USER_TO_COMPANY: dict[str, str] = {
     "USR-001": "CMP-001",
@@ -77,10 +73,6 @@ USER_VISIBILITY: dict[str, str] = {
 }
 
 
-def company_for_machine(machine_id: str) -> str | None:
-    return MACHINE_TO_COMPANY.get(machine_id)
-
-
 def company_for_user(user_id: str) -> str | None:
     return USER_TO_COMPANY.get(user_id)
 
@@ -88,5 +80,5 @@ def company_for_user(user_id: str) -> str | None:
 def user_can_access_machine(user_id: str, machine_id: str) -> bool:
     """Tenant boundary only (companyId match) -- does not check visibility tier."""
     user_company = company_for_user(user_id)
-    machine_company = company_for_machine(machine_id)
-    return user_company is not None and user_company == machine_company
+    machine = machine_lookup(machine_id)
+    return user_company is not None and machine is not None and user_company == machine["company_id"]
