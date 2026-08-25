@@ -4,4 +4,8 @@ __pycache__/
 *.pyc
 .env
 *.log
-*.db*
+*.db
+
+data/manuals/*.pdf
+data/chroma/
+data/*.xlsx

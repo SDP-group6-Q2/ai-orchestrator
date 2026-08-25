@@ -2,26 +2,27 @@
 
 Usage (from the project root):
     python -m src.run_specialist_in_terminal manuals --question "What does error E204 mean?"
-    python -m src.run_specialist_in_terminal iot --machine-id MCH-0004
     python -m src.run_specialist_in_terminal orders --user-id USR-011
-    python -m src.run_specialist_in_terminal service --machine-id MCH-0004
+    python -m src.run_specialist_in_terminal diagnostics --machine-id MCH-0004
 """
 
 from __future__ import annotations
 
 import argparse
 import logging
+import sys
 
 from langchain_ollama import ChatOllama
 
 from src.agents import make_manuals_tool, make_orders_tool, make_diagnostics_tool, make_commercial_agent, make_technical_agent
+from src.tools.manuals_tools import show_last_retrieval
 
 logger = logging.getLogger(__name__)
 
 # Tools: plain LangChain @tool callables, invoked with a flat kwargs dict and
 # returning a string directly. `args` lists which extra kwargs they expect.
 _TOOLS = {
-    "manuals": {"factory": make_manuals_tool, "args": []},
+    "manuals": {"factory": make_manuals_tool, "args": ["machine_id", "company_id"]},
     "orders": {"factory": make_orders_tool, "args": ["user_id"]},
     "diagnostics": {"factory": make_diagnostics_tool, "args": ["machine_id"]},
 }
@@ -45,6 +46,10 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--company-id", default="CMP-001", help="Company id to pass, for specialists that need it.")
     parser.add_argument("--model", default="gpt-oss:20b-cloud", help="Ollama model name.")
     parser.add_argument("--base-url", default="http://localhost:11434", help="Ollama server base URL.")
+    parser.add_argument(
+        "--show-retrieval", action="store_true",
+        help="After each manuals call, print the retrieved chunks (pre- and post-rerank) that were sent to the LLM.",
+    )
     return parser.parse_args()
 
 
@@ -85,14 +90,22 @@ def _build_request(history: list[tuple[str, str]], question: str) -> str:
     )
 
 
-def _run_once(caller, history: list[tuple[str, str]], question: str, user_id: str, machine_id: str, company_id: str) -> None:
+def _run_once(
+    caller, history: list[tuple[str, str]], question: str,
+    user_id: str, machine_id: str, company_id: str, show_retrieval: bool,
+) -> None:
     request = _build_request(history, question)
     response = caller(request, user_id=user_id, machine_id=machine_id, company_id=company_id)
     history.append((question, response))
+
+    if show_retrieval:
+        print(f"\n{show_last_retrieval()}\n")
+
     print(f"\n{response}\n")
 
 
 def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8")
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     args = _parse_args()
 
@@ -101,7 +114,7 @@ def main() -> None:
     history: list[tuple[str, str]] = []
 
     if args.question:
-        _run_once(caller, history, args.question, args.user_id, args.machine_id, args.company_id)
+        _run_once(caller, history, args.question, args.user_id, args.machine_id, args.company_id, args.show_retrieval)
         return
 
     print(f"FleetAssistant '{args.specialist}' specialist local session. Type 'exit' or 'quit' to stop.\n")
@@ -117,7 +130,7 @@ def main() -> None:
         if request.lower() in {"exit", "quit"}:
             break
 
-        _run_once(caller, history, request, args.user_id, args.machine_id, args.company_id)
+        _run_once(caller, history, request, args.user_id, args.machine_id, args.company_id, args.show_retrieval)
 
 
 if __name__ == "__main__":

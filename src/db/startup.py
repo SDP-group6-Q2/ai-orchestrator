@@ -43,6 +43,46 @@ def create_database(dbname, user, password, host, port):
     finally:
         conn.close()
 
+def create_manuals_tables(user, password, host, port, dbname):
+    """Enable pgvector and create the manuals RAG tables (separate from the flat xlsx-sheet tables)."""
+    conn = psycopg2.connect(dbname=dbname, user=user, password=password, host=host, port=port)
+    conn.autocommit = True
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS indexed_manuals (
+                    company_id TEXT NOT NULL,
+                    machine_id TEXT NOT NULL,
+                    serial_number TEXT NOT NULL,
+                    indexed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                    PRIMARY KEY (company_id, machine_id)
+                );
+            """)
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS manual_chunks (
+                    id SERIAL PRIMARY KEY,
+                    company_id TEXT NOT NULL,
+                    machine_id TEXT NOT NULL,
+                    source TEXT NOT NULL,
+                    page INTEGER NOT NULL,
+                    content TEXT NOT NULL,
+                    embedding VECTOR(384) NOT NULL
+                );
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS ix_manual_chunks_company_machine
+                ON manual_chunks (company_id, machine_id);
+            """)
+            print("pgvector extension and manuals RAG tables ready.")
+    except Exception as e:
+        print(f"Error: {e}")
+    finally:
+        conn.close()
+
+
 def load_from_excel(engine):
     with pd.ExcelFile("data/AROL_Q2_synthetic_fleet_dataset.xlsx") as xls:
         sheet_names = xls.sheet_names
@@ -64,6 +104,7 @@ def main():
     password = credentials["password"]
 
     create_database(dbname, user, password, host, port)
+    create_manuals_tables(user, password, host, port, dbname)
 
     engine = create_engine(
         f"postgresql+psycopg2://{user}:{password}@{host}:{port}/{dbname}"
