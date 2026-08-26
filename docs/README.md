@@ -3,86 +3,211 @@
 
 ![Assistant archtecture](img/arch.jpeg)
 
+*(This image predates the router/`technical_agent`/`commercial_agent` shape described
+below and has no editable source in this repo to regenerate it from — treat the diagram
+and text below as the source of truth until it's redrawn.)*
 
 ```
-POST /orchestrate
+FleetAssistant.ask(question, user_id, machine_id)
       |
       v
- FleetAssistant.ask(question, user_id, machine_id)
+ build_graph (LangGraph StateGraph)
       |
       v
- supervisor (create_agent)             <- decides which specialist(s) to call, and when it has enough to answer
+ llm_classify_intent            <- LLM router: classifies the request as technical / commercial / out_of_scope
+      |
+      +--> technical_agent (create_agent)   <- grounds its answer using manuals/diagnostics/fleet/service tools
+      |
+      +--> commercial_agent (create_agent)  <- currently a stub, no tools
+      |
+      +--> out_of_scope                     <- canned "out of scope" reply, no LLM/tool call
       |
       v
- manuals_agent | iot_agent | orders_agent | service_agent   (called as tools, any number of times, any order)
-      |
-      v
- response returned to backend
+ response
 ```
 
-Each specialist is itself a `create_agent`, wrapped as a single tool the supervisor can call — its own tool-calling loop runs against its own backend before it hands a grounded answer back up:
+*(A `POST /orchestrate` HTTP endpoint fronting `FleetAssistant` for the AROL Customer
+Platform backend is the planned integration point — no HTTP/FastAPI layer exists in this
+repo yet. Today the only entry points are `src/run_in_terminal.py`,
+`src/run_specialist_in_terminal.py`, and calling `FleetAssistant` directly from Python.)*
+
+`technical_agent` is a single `create_agent` whose tools are a mix of direct backend calls
+and nested specialist agents — there's no separate "supervisor" layer above it:
 
 ```mermaid
 flowchart TD
-    Start([FleetAssistant.ask]) --> Supervisor
+    Start([FleetAssistant.ask]) --> Router{llm_classify_intent}
 
-    subgraph Supervisor["supervisor · create_agent"]
+    Router -->|technical| Technical
+    Router -->|commercial| Commercial
+    Router -->|out_of_scope| OutOfScope[["canned reply\n(no LLM call)"]]
+
+    subgraph Technical["technical_agent · create_agent"]
         direction TB
-        Model[[model]] -->|tool call| Tools[[tools]]
-        Tools --> Model
-        Model -->|no tool call yet| Grounding{grounding middleware}
-        Grounding -->|ungrounded, retries left| Model
-        Grounding -->|grounded, or retries exhausted| Answer[[final answer]]
+        TechModel[[model]] -->|tool call| TechTools[[tools]]
+        TechTools --> TechModel
+        TechModel -->|no more tool calls| TechAnswer[[final answer]]
     end
 
-    Tools -.-> Manuals
-    Tools -.-> Iot
-    Tools -.-> Orders
-    Tools -.-> Service
+    TechTools -.-> Manuals
+    TechTools -.-> Diagnostics
+    TechTools -.-> FleetTools[get_fleet_descriptors / query_fleet]
+    TechTools -.-> ServiceTools[get_service_tables_descriptors / query_service_tickets]
 
-    subgraph Manuals["manuals_agent · create_agent"]
-        ManualsModel[[model]] --> GetManuals[get_manual_excerpts]
-        GetManuals --> ManualsModel
+    subgraph Manuals["manuals_agent · plain @tool"]
+        GetManuals["get_manual_excerpts\n(direct call, no inner LLM loop\n-- preserves the exact query text)"]
     end
 
-    subgraph Iot["iot_agent · create_agent"]
-        IotModel[[model]] --> TelemetryDescriptors[get_telemetry_tables_descriptors]
-        IotModel --> QueryTelemetry[query_telemetry_readings]
-        TelemetryDescriptors --> IotModel
-        QueryTelemetry --> IotModel
+    subgraph Diagnostics["diagnostics_agent · create_agent"]
+        DiagModel[[model]] --> TelemetryDescriptors[get_telemetry_tables_descriptors]
+        DiagModel --> QueryTelemetry[query_telemetry_readings]
+        TelemetryDescriptors --> DiagModel
+        QueryTelemetry --> DiagModel
     end
 
-    subgraph Orders["orders_agent · create_agent"]
-        OrdersModel[[model]] --> GetOrders[get_orders_info]
-        OrdersModel --> ListContracts[list_contracts]
-        GetOrders --> OrdersModel
-        ListContracts --> OrdersModel
+    subgraph Commercial["commercial_agent · create_agent"]
+        CommModel[["model\n(no tools -- always replies\n'no capability yet')"]]
     end
 
-    subgraph Service["service_agent · create_agent"]
-        ServiceModel[[model]] --> ServiceDescriptors[get_service_tables_descriptors]
-        ServiceModel --> QueryTickets[query_service_tickets]
-        ServiceModel --> OpenTicket[open_new_ticket]
-        ServiceDescriptors --> ServiceModel
-        QueryTickets --> ServiceModel
-        OpenTicket --> ServiceModel
-    end
-
-    Answer --> End([response])
+    TechAnswer --> End([response])
+    Commercial --> End
+    OutOfScope --> End
 ```
-
-The `grounding middleware` matters because Ollama does not honor `tool_choice`: nothing at the model layer forces the supervisor to call a specialist before answering. The middleware runs after every supervisor model turn and, if it answered without calling any specialist tool since the user's last message, bounces it back with a reminder (capped retries, so it can't loop forever) instead of letting an ungrounded answer through.
 
 ## FleetAssistant
 
-`FleetAssistant` is the entry point the API above delegates to. It wraps a single `supervisor` `create_agent`, whose tools are the four specialist agents (`manuals_agent` / `iot_agent` / `orders_agent` / `service_agent`) — each one its own `create_agent` grounding its answer via an Ollama tool-calling loop against a swappable backend (local placeholders today, real services/MCP later). The supervisor calls whichever specialists are relevant, in whatever order, however many times, and answers once it has grounded evidence — there's no separate routing or synthesis step.
+`FleetAssistant` is the entry point the planned API above would delegate to. It wraps
+`build_graph` (`src/graph.py`): an LLM router (`llm_classify_intent`) that classifies each
+request and dispatches to exactly one branch — `technical_agent`, `commercial_agent`, or a
+canned `out_of_scope` reply — then goes straight to `END`. There's no supervisor/handoff
+loop between branches; each request is routed once.
 
-Agents are plain functions (`make_x_tool(llm)` / `make_supervisor_agent(llm, checkpointer)`), not classes — `src/agents/` has one file per specialist plus `supervisor.py`, with no separate node/wrapper layer.
+`technical_agent` (`src/agents/technical.py`) is where the real grounding happens: its
+tools are `manuals_agent` (a plain `@tool`, calls `get_manual_excerpts` directly — real
+pgvector RAG, see Status below), `diagnostics_agent` (its own nested `create_agent`
+running a tool-calling loop against real telemetry/alarm data), and the fleet/service
+tools (`get_fleet_descriptors`, `query_fleet`, `get_service_tables_descriptors`,
+`query_service_tickets`) called directly, without a specialist wrapper of their own.
+`commercial_agent` (`src/agents/commercial.py`) is a real graph node but currently a full
+stub — no tools, its system prompt just says it has no capability yet.
 
-To try it directly from a terminal instead of through the FastAPI service:
+`src/agents/orders.py` (`orders_agent`, real `create_agent` with `get_orders_info` /
+`list_contracts` tools) exists and is exported from `src/agents/__init__.py`, but is
+**not wired into `technical.py`, `commercial.py`, or `graph.py`** — it's currently only
+reachable through the standalone `run_specialist_in_terminal.py` test harness, not through
+the real `FleetAssistant` entry point.
 
-INFO-level logs print each specialist tool call as it happens; use `--verbose` to also print the final plan and any recorded error.
+Agents are plain functions (`make_x_tool(llm)` / `make_x_agent(llm, checkpointer)`), not
+classes — `src/agents/` has one file per specialist, with no separate node/wrapper layer.
+
+To try it directly from a terminal instead of through the (not yet implemented) HTTP API:
+```bash
+python -m src.run_in_terminal --question "..." --user-id u1 --machine-id MCH-0001
+```
+Or exercise a single specialist/tool in isolation, bypassing the router:
+```bash
+python -m src.run_specialist_in_terminal manuals --machine-id MCH-0001 --question "..."
+```
+INFO-level logs print each tool call as it happens.
 
 ## Status
 
-`manuals_agent`, `iot_agent`, `orders_agent` and `service_agent` are wired end-to-end against local placeholder backends (in-memory manual corpus, telemetry log, order/contract log, ticket log) so the supervisor/specialist pattern and tool-calling loop can be validated before the real backends (RAG, MCP tool calls, ERP/CRM/IoT integrations) are implemented.
+- `manuals_agent` — real pgvector RAG over Postgres. PDFs under `data/manuals/` are
+  chunked, embedded, and indexed eagerly by `index_all_manuals()`
+  (`src/tools/manuals_tools.py`) when `python -m src.db.startup` runs, matched to
+  machines by serial number; `get_manual_excerpts` is a read-only query against the
+  already-indexed data. See [Testing the manuals agent](#testing-the-manuals-agent)
+  below.
+- `diagnostics_agent` — real Postgres (`telemetrysnapshots`, `alarms` tables).
+- `get_fleet_descriptors` / `query_fleet` — real Postgres (`machines`, `machinemodels`).
+- `get_service_tables_descriptors` / `query_service_tickets` / `open_new_ticket` — real
+  Postgres (`maintenancetickets`).
+- `orders_agent` — hardcoded mock data (`src/tools/orders_tools.py`), and not wired into
+  the live graph (see above) — exists for local/terminal testing only.
+- `commercial_agent` — stub, no backend, no tools.
+- User↔company/visibility mapping (`src/tools/fleet_directory.py`'s `USER_TO_COMPANY` /
+  `USER_VISIBILITY`) is still hardcoded, pending a real lookup — machine↔company/serial
+  resolution (`machine_lookup`) already queries Postgres directly.
+
+## Testing the manuals agent
+
+Machine → company → manual reference (from the fleet dataset):
+
+| machine_id | company_id | serial_number (manual) |
+| --- | --- | --- |
+| MCH-0001, MCH-0002, MCH-0003 | CMP-001 | 15610, 17203, 17579 |
+| MCH-0004, MCH-0005 | CMP-003 | 17478, A4344 |
+| MCH-0006 | CMP-004 | A2064 |
+| MCH-0007, MCH-0008 | CMP-002 | A2055, A2132 |
+
+`company_id` is no longer a caller-supplied argument anywhere in this flow — it's derived
+server-side from `machine_id` (`machine_lookup` in `src/tools/fleet_directory.py`) — the
+table above is just fleet reference data, not something you need to pass.
+
+Example commands (after `python -m src.db.startup`, which now indexes all manuals up
+front — no per-query indexing delay to wait through):
+
+```bash
+python -m src.run_specialist_in_terminal manuals --machine-id MCH-0004 --question "What does error E204 mean?"
+```
+
+```bash
+python -m src.run_specialist_in_terminal manuals --machine-id MCH-0004 --question "What safety checks should I do before maintenance on this machine?"
+```
+
+```bash
+python -m src.run_specialist_in_terminal manuals --machine-id MCH-0004 --question "What is the lubrication schedule for this machine?"
+```
+
+```bash
+python -m src.run_specialist_in_terminal manuals --machine-id MCH-9999 --question "What does error E204 mean?"
+```
+
+```bash
+python -m src.run_specialist_in_terminal manuals --machine-id MCH-0001 --question "How many closing heads does this machine have?"
+```
+
+```bash
+python -m src.run_specialist_in_terminal manuals --machine-id MCH-0002 --question "How do I replace the compensating springs?"
+```
+
+```bash
+python -m src.run_specialist_in_terminal manuals --machine-id MCH-0002 --question "What should I do before operating on the caps selection equipment?"
+```
+
+```bash
+python -m src.run_specialist_in_terminal manuals --machine-id MCH-0007 --question "What lubricant should I use for this machine?"
+```
+
+```bash
+python -m src.run_specialist_in_terminal manuals --machine-id MCH-0007 --question "How do I adjust the threading roller lateral load?"
+```
+
+```bash
+python -m src.run_specialist_in_terminal manuals --machine-id MCH-0007 --question "How should this machine be scrapped or disposed of?"
+```
+
+Add `--show-retrieval` to any command to print the pgvector candidates and the chunks kept
+after reranking, before the final result — useful for checking *why* an answer came out
+the way it did.
+
+### Real error codes present in the MCH-0004 (17478) manual
+
+E204 does not exist in this manual — the first test above is a genuine negative case, not
+a mistake. These do exist and should return a grounded, cited answer:
+
+```bash
+python -m src.run_specialist_in_terminal manuals --machine-id MCH-0004 --question "What does error E20 mean?" --show-retrieval
+```
+
+```bash
+python -m src.run_specialist_in_terminal manuals --machine-id MCH-0004 --question "What does error E15 mean?"
+```
+
+```bash
+python -m src.run_specialist_in_terminal manuals --machine-id MCH-0004 --question "What does error E11 mean?"
+```
+
+```bash
+python -m src.run_specialist_in_terminal manuals --machine-id MCH-0004 --question "What does error E10 mean?"
+```

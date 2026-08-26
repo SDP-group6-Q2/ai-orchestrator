@@ -1,6 +1,6 @@
 # ai-orchestrator
 
-The AI orchestration layer connecting the AROL Customer Platform backend to the specialized AI agents (Manuals, IoT, Orders, Service). It is a LangGraph supervisor agent that calls out to specialist tools until it has enough grounded evidence to answer.
+The AI orchestration layer meant to connect the AROL Customer Platform backend to a set of specialized AI agents. It's a LangGraph graph that routes each request (via an LLM classifier) to a `technical_agent` — grounded in machine manuals (RAG), live telemetry, fleet data, and service tickets — or a `commercial_agent` (currently a stub). See [Documentation](docs/README.md) for the current architecture and what's real vs. mocked/stubbed today.
 
 ## How to run it
 
@@ -27,8 +27,8 @@ The AI orchestration layer connecting the AROL Customer Platform backend to the 
    | `POSTGRES_PASSWORD` | Postgres password | `your_password` |
    | `POSTGRES_HOST` | Postgres host | `localhost` |
    | `POSTGRES_PORT` | Postgres port | `5432` |
-   | `ASSISTANT_DB` | Database name to create/use for the assistant | `postgres` |
-5. Create the database and load the fleet dataset (`data/AROL_Q2_synthetic_fleet_dataset.xlsx`) into it:
+   | `ASSISTANT_DB` | Database name to create/use for the assistant | `assistant` |
+5. Create the database, load the fleet dataset (`data/AROL_Q2_synthetic_fleet_dataset.xlsx`), and index any manual PDFs found under `data/manuals/`:
    ```bash
    python -m src.db.startup
    ```
