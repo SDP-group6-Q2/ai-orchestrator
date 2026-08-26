@@ -13,6 +13,7 @@ from src.graph import build_graph
 from src.state import GraphState
 
 from langgraph.checkpoint.memory import InMemorySaver
+from langchain.messages import HumanMessage, SystemMessage
 
 
 class FleetAssistant:
@@ -24,18 +25,22 @@ class FleetAssistant:
         
         self._graph = build_graph(llm = self.llm, checkpointer=self._checkpointer)
 
-    def run(self, question: str, user_id: str, machine_id: int) -> GraphState:
+
+    def run(self, question: str, user_id: str, machine_id: str) -> GraphState:
+        context = SystemMessage(
+            content=(
+                f"Current user_id: {user_id}. Current machine_id: {machine_id}. "
+                "Use this machine_id for tool calls unless the user names a different machine."
+            )
+        )
         result = self._graph.invoke(
             {
-                "messages": [
-                    {"role": "user", "content": f"[context] user_id={user_id}; machine_id={machine_id}"},
-                    {"role": "user", "content": question},
-                ],
-            },
-            config=self.config
+                "messages": [context, HumanMessage(content=question)],
+            }, # type: ignore
+            config=self.config # type: ignore
         )
         return cast(GraphState, result)
 
-    def ask(self, question: str, user_id: str, machine_id: int) -> str:
+    def ask(self, question: str, user_id: str, machine_id: str) -> str:
         result = self.run(question, user_id, machine_id)
         return result["messages"][-1].content

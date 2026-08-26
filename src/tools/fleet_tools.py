@@ -1,5 +1,3 @@
-"""Telemetry retrieval helpers used by the IoT agent."""
-
 from __future__ import annotations
 import logging
 
@@ -11,11 +9,12 @@ from src.db.db import get_db
 
 logger = logging.getLogger(__name__)
 
+
 @tool
-def get_telemetry_tables_descriptors():
-    """Return the table descriptors for the telemetry readings database."""
-    with get_db() as con:
-        with con.cursor() as cursor:
+def get_fleet_descriptors():
+    """Return the table descriptors for the fleet database."""
+    with get_db() as conn:
+        with conn.cursor() as cursor:
             cursor.execute(
                 """
                 SELECT column_name, data_type
@@ -23,9 +22,9 @@ def get_telemetry_tables_descriptors():
                 WHERE table_name = %s
                 ORDER BY ordinal_position;
                 """,
-                ("telemetrysnapshots",),
+                ("machines",),
             )
-            telemetry_descriptors = [dict(row) for row in cursor.fetchall()]
+            machines_descriptors = [dict(row) for row in cursor.fetchall()]
 
             cursor.execute(
                 """
@@ -34,18 +33,20 @@ def get_telemetry_tables_descriptors():
                 WHERE table_name = %s
                 ORDER BY ordinal_position;
                 """,
-                ("alarms",),
+                ("machinemodels",),
             )
-            alarms_descriptors = [dict(row) for row in cursor.fetchall()]
+            machinemodels_descriptors = [dict(row) for row in cursor.fetchall()]
 
-    return {
-        "telemetrysnapshots": telemetry_descriptors,
-        "alarms": alarms_descriptors
-    }
+            return {
+                "machines": machines_descriptors,
+                "machinemodels": machinemodels_descriptors
+            }
 
 @tool
-def query_telemetry_readings(sql_query) -> list[dict]:
-    """Using an SQL statement, query telemetry readings for a given machine and optional metric."""
+def query_fleet(sql_query) -> list[dict]:
+    """Based on fleet tables descriptors, using an SQL statement, query fleet."""
+
+    logger.info("Querying fleet with SQL: %s", sql_query)
 
     # 1. Prevent empty strings or multi-statement injections (e.g., "SELECT 1; DROP TABLE users;")
     statements = [s for s in sqlparse.parse(sql_query) if s.token_first(skip_cm=True) is not None]
