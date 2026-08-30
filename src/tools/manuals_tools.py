@@ -168,6 +168,9 @@ def get_manual_excerpts(query: str, machine_id: str) -> str:
     # since company_id is derived from machine_id below, not attacker/LLM-controlled).
     # A commercial-only user should still be denied manuals of a company they don't
     # belong to; visibility tiers (technician/full) aren't enforced at all yet.
+    if not query.strip():
+        return "No query was provided. Please ask a specific question about the manual."
+
     machine = machine_lookup(machine_id)
     if machine is None:
         return f"No manual is registered for machine_id {machine_id}."
