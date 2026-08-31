@@ -69,3 +69,48 @@ def query_orders(sql_query) -> list[dict]:
         return [{"error": f"Query execution failed: {e}"}]
 
     return result
+
+
+
+@tool
+def get_order_details(order_id: str):
+    """Return the details and current status of an order."""
+
+    query = """
+        SELECT
+            "orderId",
+            "quoteId",
+            "companyId",
+            "orderStatus",
+            "orderDate",
+            "expectedDeliveryDate",
+            "shipmentStatus",
+            "currency",
+            "notes"
+        FROM orders
+        WHERE "orderId" = %s
+    """
+
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query, (order_id,))
+            return cursor.fetchall()
+
+
+@tool
+def get_order_lines(order_id: str):
+    """Return fulfillment information for the lines of an order."""
+
+    query = """
+        SELECT
+            "orderLineId",
+            "orderId",
+            "fulfillmentStatus"
+        FROM orderlines
+        WHERE "orderId" = %s
+    """
+
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query, (order_id,))
+            return cursor.fetchall()
