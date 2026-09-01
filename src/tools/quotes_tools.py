@@ -206,3 +206,241 @@ def get_quote_lines(quote_revision_id: str) -> list[dict]:
         with conn.cursor() as cursor:
             cursor.execute(query, (quote_revision_id,))
             return [dict(row) for row in cursor.fetchall()]
+
+@tool
+def get_company_quotes(company_id: str) -> list[dict]:
+    """
+    Return all quotes belonging to a company.
+
+    Args:
+        company_id: Company identifier.
+    """
+
+    query = """
+        SELECT
+            "quoteId",
+            "companyId",
+            "currency",
+            "createdAt",
+            "validUntil",
+            "description"
+        FROM quotes
+        WHERE "companyId" = %s
+        ORDER BY "createdAt" DESC;
+    """
+
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query, (company_id,))
+            return [dict(row) for row in cursor.fetchall()]
+
+
+@tool
+def get_latest_quote_revision(quote_id: str) -> dict | None:
+    """
+    Return the latest revision of a quote.
+
+    Args:
+        quote_id: Quote identifier.
+    """
+
+    query = """
+        SELECT
+            "quoteRevisionId",
+            "quoteId",
+            "revisionNumber",
+            "revisionStatus",
+            "issuedAt",
+            "discountRate",
+            "changeSummary"
+        FROM quoterevisions
+        WHERE "quoteId" = %s
+        ORDER BY "revisionNumber" DESC
+        LIMIT 1;
+    """
+
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query, (quote_id,))
+            row = cursor.fetchone()
+
+            if row is None:
+                return None
+
+            return dict(row)
+
+def get_quote_details_for_company(
+    quote_id: str,
+    company_id: str,
+) -> dict | None:
+    """
+    Return a quote only if it belongs to the specified company.
+    """
+
+    query = """
+        SELECT
+            "quoteId",
+            "companyId",
+            "currency",
+            "createdAt",
+            "validUntil",
+            "description"
+        FROM quotes
+        WHERE "quoteId" = %s
+          AND "companyId" = %s
+        LIMIT 1;
+    """
+
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                query,
+                (quote_id, company_id),
+            )
+
+            row = cursor.fetchone()
+
+            if row is None:
+                return None
+
+            return dict(row)
+
+
+def get_quote_revisions_for_company(
+    quote_id: str,
+    company_id: str,
+) -> list[dict]:
+    """
+    Return quote revisions only if the quote belongs to the specified company.
+    """
+
+    query = """
+        SELECT
+            qr."quoteRevisionId",
+            qr."quoteId",
+            qr."revisionNumber",
+            qr."revisionStatus",
+            qr."issuedAt",
+            qr."discountRate",
+            qr."changeSummary"
+        FROM quoterevisions qr
+        JOIN quotes q
+            ON q."quoteId" = qr."quoteId"
+        WHERE qr."quoteId" = %s
+          AND q."companyId" = %s
+        ORDER BY qr."revisionNumber" ASC;
+    """
+
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                query,
+                (quote_id, company_id),
+            )
+
+            return [dict(row) for row in cursor.fetchall()]
+
+
+def get_latest_quote_revision_for_company(
+    quote_id: str,
+    company_id: str,
+) -> dict | None:
+    """
+    Return the latest quote revision only if the quote belongs to the specified company.
+    """
+
+    query = """
+        SELECT
+            qr."quoteRevisionId",
+            qr."quoteId",
+            qr."revisionNumber",
+            qr."revisionStatus",
+            qr."issuedAt",
+            qr."discountRate",
+            qr."changeSummary"
+        FROM quoterevisions qr
+        JOIN quotes q
+            ON q."quoteId" = qr."quoteId"
+        WHERE qr."quoteId" = %s
+          AND q."companyId" = %s
+        ORDER BY qr."revisionNumber" DESC
+        LIMIT 1;
+    """
+
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                query,
+                (quote_id, company_id),
+            )
+
+            row = cursor.fetchone()
+
+            if row is None:
+                return None
+
+            return dict(row)
+
+
+def get_quote_lines_for_company(
+    quote_revision_id: str,
+    company_id: str,
+) -> list[dict]:
+    """
+    Return quote lines only if the revision belongs to a quote owned by the specified company.
+    """
+
+    query = """
+        SELECT
+            ql."quoteLineId",
+            ql."quoteRevisionId",
+            ql."machineId",
+            ql."price",
+            ql."description"
+        FROM quotelines ql
+        JOIN quoterevisions qr
+            ON qr."quoteRevisionId" = ql."quoteRevisionId"
+        JOIN quotes q
+            ON q."quoteId" = qr."quoteId"
+        WHERE ql."quoteRevisionId" = %s
+          AND q."companyId" = %s;
+    """
+
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                query,
+                (quote_revision_id, company_id),
+            )
+
+            return [dict(row) for row in cursor.fetchall()]
+
+
+def get_company_quotes_secure(
+    company_id: str,
+) -> list[dict]:
+    """
+    Return all quotes belonging to the specified company.
+    """
+
+    query = """
+        SELECT
+            "quoteId",
+            "companyId",
+            "currency",
+            "createdAt",
+            "validUntil",
+            "description"
+        FROM quotes
+        WHERE "companyId" = %s
+        ORDER BY "createdAt" DESC;
+    """
+
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(
+                query,
+                (company_id,),
+            )
+
+            return [dict(row) for row in cursor.fetchall()]

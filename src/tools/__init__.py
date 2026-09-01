@@ -32,6 +32,21 @@ from src.tools.orders_tools import (
     get_order_lines,
 )
 
+from src.tools.quotes_tools import (
+    get_quote_details,
+    get_quote_revisions,
+    get_quote_lines,
+    get_company_quotes,
+    get_latest_quote_revision,
+)
+
+from src.tools.orders_tools import (
+    get_order_details,
+    get_order_lines,
+    get_orders_by_quote,
+    get_company_orders,
+)
+
 __all__ = [
     "get_orders_descriptors",
     "query_orders",

@@ -4,16 +4,28 @@ import logging
 
 from langchain.agents import create_agent
 from langchain.chat_models import BaseChatModel
+from langchain_core.tools import tool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
-from src.tools import (
-    get_quote_details,
-    get_quote_revisions,
-    get_quote_lines,
-    get_order_details,
-    get_order_lines,
+from src.security.access import (
+    can_access_commercial_data,
+    get_user_context,
 )
 
+from src.tools.orders_tools import (
+    get_company_orders_secure,
+    get_order_details_for_company,
+    get_order_lines_for_company,
+    get_orders_by_quote_for_company,
+)
+
+from src.tools.quotes_tools import (
+    get_company_quotes_secure,
+    get_latest_quote_revision_for_company,
+    get_quote_details_for_company,
+    get_quote_lines_for_company,
+    get_quote_revisions_for_company,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,55 +39,170 @@ _SYSTEM_PROMPT = (
     "Always use the available commercial tools to retrieve evidence "
     "before answering questions about commercial data.\n\n"
 
+    "ACCESS CONTROL:\n"
+    "- You can access commercial data only for the current user's company.\n"
+    "- Never claim to have access to commercial data from another company.\n"
+    "- If requested data is not returned by the tools, do not infer or invent it.\n\n"
+
     "QUOTES:\n"
-    "- Use get_quote_details when you need general information about a quote.\n"
-    "- Use get_quote_revisions when you need revision history, revision status, "
-    "discounts or changes between revisions.\n"
-    "- Use get_quote_lines when you need the machines, descriptions or prices "
-    "contained in a specific quote revision.\n"
+    "- Use get_quote_details for general information about a specific quote.\n"
+    "- Use get_quote_revisions for the complete revision history of a quote.\n"
+    "- Use get_latest_quote_revision when only the current/latest revision is needed.\n"
+    "- Use get_quote_lines for machines, descriptions and prices contained "
+    "in a specific quote revision.\n"
+    "- Use get_company_quotes to retrieve quotes associated with the current company.\n"
     "- A quote can have multiple revisions.\n"
     "- The revision with the highest revisionNumber is the latest revision.\n"
     "- revisionStatus represents the lifecycle state of a revision.\n"
+    "- When comparing quote revisions, always consider revisionNumber, "
+    "revisionStatus, discountRate and changeSummary.\n"
     "- Quote lines belong to a revision through quoteRevisionId.\n"
     "- QuoteLines.price is already net of discountRate. Never apply the "
     "discount twice.\n\n"
 
     "ORDERS:\n"
-    "- Use get_order_details when you need information about an order, "
-    "including orderStatus, shipmentStatus, dates and originating quote.\n"
-    "- Use get_order_lines when you need fulfillment information.\n"
+    "- Use get_order_details for information about a specific order, including "
+    "orderStatus, shipmentStatus, dates and originating quote.\n"
+    "- Use get_order_lines for fulfillment information about an order.\n"
+    "- Use get_orders_by_quote to find orders generated from a quote.\n"
+    "- Use get_company_orders to retrieve orders associated with the current company.\n"
     "- Orders reference their originating quote through quoteId.\n"
-    "- Order lines contain fulfillment status only; they do not contain "
+    "- Order lines contain fulfillment status only. They do not contain "
     "item descriptions, quantities or prices.\n"
     "- If the user asks about the commercial contents or price of an order, "
-    "retrieve the associated quote and its relevant quote revision and lines.\n\n"
+    "retrieve the associated quote, its relevant revision and its quote lines.\n\n"
 
     "Never invent commercial information. "
     "Answer only using information returned by the tools. "
     "If the tools do not provide enough information, explicitly say that "
     "the available commercial data is insufficient.\n\n"
 
-    "Keep answers concise and practical."
+    "RESPONSE FORMAT:\n"
+    "- Write responses for a customer-facing chat interface.\n"
+    "- Use clean Markdown suitable for frontend rendering.\n"
+    "- Prefer short headings and bullet points over tables.\n"
+    "- Do not expose tool calls, tool names, internal reasoning, SQL, logs, "
+    "function metadata or internal source references.\n"
+    "- Do not include technical citations or assistant/function call traces.\n"
+    "- Keep answers concise, readable and practical.\n\n"
+    
+    "- If a tool returns ACCESS_DENIED_OR_UNAVAILABLE, tell the user that "
+    "they cannot access commercial information for the requested resource.\n"
+    "- Never speculate that an inaccessible resource was cancelled, deleted, "
+    "entered incorrectly or does not exist.\n"
+
+    "Example response style:\n"
+    "### Order ORD-XXXX\n"
+    "- **Status:** Closed\n"
+    "- **Shipment status:** Installed\n"
+    "- **Originating quote:** QTE-XXXX\n"
+    "- **Approved revision:** QREV-XXXX\n\n"
+    "**Commercial changes**\n"
+    "- First change\n"
+    "- Second change\n"
 )
 
 
 def make_commercial_agent(
     llm: BaseChatModel,
+    user_id: str,
     checkpointer: BaseCheckpointSaver | None = None,
 ):
+    user_context = get_user_context(user_id)
+
+    if user_context is None:
+        raise ValueError(f"Unknown user: {user_id}")
+
+    if not can_access_commercial_data(user_context):
+        raise PermissionError(
+            f"User {user_id} is not allowed to access commercial data."
+        )
+
+    company_id = user_context["companyId"]
+
+    @tool
+    def get_quote_details(quote_id: str) -> dict | None:
+        """Return details of a quote accessible to the current user."""
+        return get_quote_details_for_company(
+            quote_id,
+            company_id,
+        )
+
+    @tool
+    def get_quote_revisions(quote_id: str) -> list[dict]:
+        """Return revisions of a quote accessible to the current user."""
+        return get_quote_revisions_for_company(
+            quote_id,
+            company_id,
+        )
+
+    @tool
+    def get_quote_lines(quote_revision_id: str) -> list[dict]:
+        """Return quote lines accessible to the current user."""
+        return get_quote_lines_for_company(
+            quote_revision_id,
+            company_id,
+        )
+
+    @tool
+    def get_company_quotes() -> list[dict]:
+        """Return quotes belonging to the current user's company."""
+        return get_company_quotes_secure(company_id)
+
+    @tool
+    def get_latest_quote_revision(
+        quote_id: str,
+    ) -> dict | None:
+        """Return the latest revision of a quote accessible to the current user."""
+        return get_latest_quote_revision_for_company(
+            quote_id,
+            company_id,
+        )
+
+    @tool
+    def get_order_details(order_id: str) -> dict | None:
+        """Return details of an order accessible to the current user."""
+        return get_order_details_for_company(
+            order_id,
+            company_id,
+        )
+
+    @tool
+    def get_order_lines(order_id: str) -> list[dict]:
+        """Return fulfillment lines for an order accessible to the current user."""
+        return get_order_lines_for_company(
+            order_id,
+            company_id,
+        )
+
+    @tool
+    def get_orders_by_quote(quote_id: str) -> list[dict]:
+        """Return orders created from a quote accessible to the current user."""
+        return get_orders_by_quote_for_company(
+            quote_id,
+            company_id,
+        )
+
+    @tool
+    def get_company_orders() -> list[dict]:
+        """Return orders belonging to the current user's company."""
+        return get_company_orders_secure(company_id)
+
     tools = [
         get_quote_details,
         get_quote_revisions,
         get_quote_lines,
+        get_company_quotes,
+        get_latest_quote_revision,
         get_order_details,
         get_order_lines,
+        get_orders_by_quote,
+        get_company_orders,
     ]
 
-    agent = create_agent(
+    return create_agent(
         model=llm,
         tools=tools,
         system_prompt=_SYSTEM_PROMPT,
         checkpointer=checkpointer,
     )
-
-    return agent
