@@ -8,7 +8,7 @@ below and has no editable source in this repo to regenerate it from — treat th
 and text below as the source of truth until it's redrawn.)*
 
 ```
-FleetAssistant.ask(question, user_id, machine_id)
+FleetAssistant.ask(question, user_id, machine_id, history=None)
       |
       v
  build_graph (LangGraph StateGraph)
@@ -26,10 +26,11 @@ FleetAssistant.ask(question, user_id, machine_id)
  response
 ```
 
-*(A `POST /orchestrate` HTTP endpoint fronting `FleetAssistant` for the AROL Customer
-Platform backend is the planned integration point — no HTTP/FastAPI layer exists in this
-repo yet. Today the only entry points are `src/run_in_terminal.py`,
-`src/run_specialist_in_terminal.py`, and calling `FleetAssistant` directly from Python.)*
+*(There is no HTTP API in this repo. The AROL Customer Platform backend imports
+`FleetAssistant` directly, in-process, via a git submodule at `backend/assistant/` — see the
+root [README](../README.md#how-its-integrated). The entry points here are
+`src/run_in_terminal.py`, `src/run_specialist_in_terminal.py`, and calling `FleetAssistant`
+directly from Python.)*
 
 `technical_agent` is a single `create_agent` whose tools are a mix of direct backend calls
 and nested specialist agents — there's no separate "supervisor" layer above it:
@@ -76,11 +77,20 @@ flowchart TD
 
 ## FleetAssistant
 
-`FleetAssistant` is the entry point the planned API above would delegate to. It wraps
+`FleetAssistant` is the entry point the backend integration above delegates to. It wraps
 `build_graph` (`src/graph.py`): an LLM router (`llm_classify_intent`) that classifies each
 request and dispatches to exactly one branch — `technical_agent`, `commercial_agent`, or a
 canned `out_of_scope` reply — then goes straight to `END`. There's no supervisor/handoff
 loop between branches; each request is routed once.
+
+`FleetAssistant.run`/`.ask` take an optional `history` argument (a list of
+`{"role": "user" | "assistant", "content": str}` dicts, oldest first), prepended as
+`HumanMessage`/`AIMessage` turns before the current question in the `messages` list sent
+into the graph. This is how multi-turn context reaches the router and agents — each
+`FleetAssistant` instance builds its own fresh `InMemorySaver` checkpointer and random
+`thread_id` on construction, so relying on the checkpointer for cross-request memory doesn't
+work when a new instance is built per request (as the backend integration does); the caller
+is expected to persist and re-supply history itself.
 
 `technical_agent` (`src/agents/technical.py`) is where the real grounding happens: its
 tools are `manuals_agent` (a plain `@tool`, calls `get_manual_excerpts` directly — real
