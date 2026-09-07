@@ -45,7 +45,7 @@ _ROUTER_SYSTEM_PROMPT = (
     "{\"intent\": \"<intent>\", \"needs_more_context\": <true|false>}. "
 )
 
-_HISTORY_WINDOW_SIZES = (4, 8, 16)  # escalating message counts; last value is the cap
+_HISTORY_WINDOW_SIZES = (1, 2, 4, 8)  # escalating message counts; last value is the cap
 
 class Route(BaseModel):
     intent: Literal["technical", "commercial", "out_of_scope"] = Field(None, description="The next step in the routing process") # type: ignore
@@ -67,10 +67,10 @@ def build_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):
 
     def llm_classify_intent(state: State):
         # Classify using an escalating window of the conversation, not always the full history:
-        # most turns are classifiable from just the last couple of exchanges, and re-sending the
-        # whole conversation to the router every turn is wasted cost as it grows. Start small (4
-        # messages) and only widen (8, then 16 -- the cap) when the router itself signals it can't
-        # resolve a back-reference ("that error", "what I just asked") from the window it has.
+        # most turns are classifiable from just the latest message or two, and re-sending the
+        # whole conversation to the router every turn is wasted cost as it grows. Start minimal
+        # (1 message) and only widen (2, 4, then 8 -- the cap) when the router itself signals it
+        # can't resolve a back-reference ("that error", "what I just asked") from the window it has.
         # comment: it seems ollama bypasses the structured output functionality, so this might fail with ollama. Thats why include formatting the output as json in the system prompt.
         all_messages = state["messages"]
 
