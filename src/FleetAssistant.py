@@ -7,13 +7,28 @@ from __future__ import annotations
 from langchain_ollama import ChatOllama
 import uuid
 
-from typing import cast
+from typing import cast, TypedDict
 
 from src.graph import build_graph
 from src.state import GraphState
 
 from langgraph.checkpoint.memory import InMemorySaver
-from langchain.messages import HumanMessage
+from langchain.messages import AIMessage, HumanMessage, SystemMessage
+
+
+class HistoryTurn(TypedDict):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+def _history_to_messages(history: list[HistoryTurn]) -> list[HumanMessage | AIMessage]:
+    messages: list[HumanMessage | AIMessage] = []
+    for turn in history:
+        if turn["role"] == "user":
+            messages.append(HumanMessage(content=turn["content"]))
+        else:
+            messages.append(AIMessage(content=turn["content"]))
+    return messages
 
 
 class FleetAssistant:
@@ -22,19 +37,38 @@ class FleetAssistant:
 
         self._checkpointer = InMemorySaver()
         self.config = {"configurable": {"thread_id": uuid.uuid4()}}
-        
+
         self._graph = build_graph(llm = self.llm, checkpointer=self._checkpointer)
 
-    def run(self, question: str, user_id: str, machine_id: int) -> GraphState:
+
+    def run(
+        self,
+        question: str,
+        user_id: str,
+        machine_id: str,
+        history: list[HistoryTurn] | None = None,
+    ) -> GraphState:
+        context = SystemMessage(
+            content=(
+                f"Current user_id: {user_id}. Current machine_id: {machine_id}. "
+                "Use this machine_id for tool calls unless the user names a different machine."
+            )
+        )
+        prior_messages = _history_to_messages(history) if history else []
         result = self._graph.invoke(
             {
-                "messages": [HumanMessage(content=question)],
-                "user": {"user_id": user_id, "machine_id": machine_id},
+                "messages": [context, *prior_messages, HumanMessage(content=question)],
             }, # type: ignore
             config=self.config # type: ignore
         )
         return cast(GraphState, result)
 
-    def ask(self, question: str, user_id: str, machine_id: int) -> str:
-        result = self.run(question, user_id, machine_id)
+    def ask(
+        self,
+        question: str,
+        user_id: str,
+        machine_id: str,
+        history: list[HistoryTurn] | None = None,
+    ) -> str:
+        result = self.run(question, user_id, machine_id, history=history)
         return result["messages"][-1].content

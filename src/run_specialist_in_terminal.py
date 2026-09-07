@@ -3,10 +3,17 @@
 Usage (from the project root):
 
     python -m src.run_specialist_in_terminal manuals \
-        --question "What does error E204 mean?"
+        --question "What does error E204 mean?" \
+        --machine-id MCH-0004
 
     python -m src.run_specialist_in_terminal iot \
         --machine-id MCH-0004
+
+    python -m src.run_specialist_in_terminal diagnostics \
+        --machine-id MCH-0004
+
+    python -m src.run_specialist_in_terminal orders \
+        --user-id USR-011
 
     python -m src.run_specialist_in_terminal commercial \
         --user-id USR-011
@@ -20,16 +27,21 @@ from __future__ import annotations
 import argparse
 import logging
 import re
+import sys
 
 from langchain_ollama import ChatOllama
 
 from src.agents import (
     make_commercial_agent,
+    make_diagnostics_tool,
     make_iot_tool,
     make_manuals_tool,
+    make_orders_tool,
     make_service_tool,
     make_technical_agent,
 )
+
+from src.tools.manuals_tools import show_last_retrieval
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +52,7 @@ logger = logging.getLogger(__name__)
 _TOOLS = {
     "manuals": {
         "factory": make_manuals_tool,
-        "args": [],
+        "args": ["machine_id"],
     },
     "iot": {
         "factory": make_iot_tool,
@@ -48,6 +60,14 @@ _TOOLS = {
     },
     "service": {
         "factory": make_service_tool,
+        "args": ["machine_id"],
+    },
+    "orders": {
+        "factory": make_orders_tool,
+        "args": ["user_id"],
+    },
+    "diagnostics": {
+        "factory": make_diagnostics_tool,
         "args": ["machine_id"],
     },
 }
@@ -152,6 +172,15 @@ def _parse_args() -> argparse.Namespace:
         "--base-url",
         default="http://localhost:11434",
         help="Ollama server base URL.",
+    )
+
+    parser.add_argument(
+        "--show-retrieval",
+        action="store_true",
+        help=(
+            "After each manuals call, print the retrieved chunks "
+            "(pre- and post-rerank) that were sent to the LLM."
+        ),
     )
 
     return parser.parse_args()
@@ -287,6 +316,7 @@ def _run_once(
     user_id: str,
     machine_id: str,
     company_id: str,
+    show_retrieval: bool,
 ) -> None:
     request = _build_request(
         history,
@@ -310,10 +340,15 @@ def _run_once(
         )
     )
 
+    if show_retrieval:
+        print(f"\n{show_last_retrieval()}\n")
+
     print(f"\n{response}\n")
 
 
 def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8")
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(levelname)s %(name)s: %(message)s",
@@ -333,16 +368,17 @@ def main() -> None:
 
     history: list[tuple[str, str]] = []
 
-    if args.question:
-        _run_once(
-            caller,
-            history,
-            args.question,
-            args.user_id,
-            args.machine_id,
-            args.company_id,
-        )
-        return
+if args.question:
+    _run_once(
+        caller,
+        history,
+        args.question,
+        args.user_id,
+        args.machine_id,
+        args.company_id,
+        args.show_retrieval,
+    )
+    return
 
     print(
         f"FleetAssistant '{args.specialist}' specialist local session. "
@@ -362,14 +398,15 @@ def main() -> None:
         if request.lower() in {"exit", "quit"}:
             break
 
-        _run_once(
-            caller,
-            history,
-            request,
-            args.user_id,
-            args.machine_id,
-            args.company_id,
-        )
+_run_once(
+    caller,
+    history,
+    request,
+    args.user_id,
+    args.machine_id,
+    args.company_id,
+    args.show_retrieval,
+)
 
 
 if __name__ == "__main__":

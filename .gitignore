@@ -5,3 +5,7 @@ __pycache__/
 .env
 *.log
 *.db
+
+data/manuals/*.pdf
+data/chroma/
+data/*.xlsx
