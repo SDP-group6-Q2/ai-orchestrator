@@ -8,10 +8,16 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import START, StateGraph, END
 from langchain.messages import SystemMessage
 from langgraph.graph.message import RemoveMessage
+from langgraph.runtime import Runtime
 
 
 from src.state import GraphState as State
 from src.context import AgentContext
+from src.security.access import (
+    can_access_commercial_data,
+    can_access_technical_data,
+    get_user_context,
+)
 
 from src.agents import (make_commercial_agent, make_technical_agent)
 
@@ -66,6 +72,35 @@ def build_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):
         )
         return state
 
+    def access_denied(state: State):
+        state["messages"].append(
+            SystemMessage(content="I'm sorry, you don't have permission to access that type of information. Please contact your administrator if you believe this is a mistake.")
+        )
+        return state
+
+    def check_access(state: State, runtime: Runtime[AgentContext]):
+        # Runs right after intent classification, before any specialist agent is invoked --
+        # a per-request, single lookup that denies a whole category of request up front,
+        # rather than relying only on each tool's own per-call visibility gate. This also
+        # covers a blind spot the tool-level gates can't: if the LLM answers a commercial/
+        # technical question without calling any gated tool at all (e.g. from hallucinated
+        # or conversation-history "knowledge"), there's no tool call to deny -- routing the
+        # unauthorized intent away before the specialist agent ever runs closes that gap.
+        intent = state["intent"]
+        if intent not in ("commercial", "technical"):
+            return {}
+
+        user_context = get_user_context(runtime.context.user_id)
+        if user_context is None:
+            return {"intent": "access_denied"}
+
+        if intent == "commercial" and not can_access_commercial_data(user_context):
+            return {"intent": "access_denied"}
+        if intent == "technical" and not can_access_technical_data(user_context):
+            return {"intent": "access_denied"}
+
+        return {}
+
     def llm_classify_intent(state: State):
         # Classify using an escalating window of the conversation, not always the full history:
         # most turns are classifiable from just the latest message or two, and re-sending the
@@ -109,21 +144,26 @@ def build_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):
 
     router_builder = StateGraph(State, context_schema=AgentContext)
     router_builder.add_node("llm_classify_intent", llm_classify_intent)
+    router_builder.add_node("check_access", check_access)
     router_builder.add_node("commercial_agent", make_commercial_agent(llm, checkpointer=checkpointer))
     router_builder.add_node("technical_agent", make_technical_agent(llm, checkpointer=checkpointer))
     router_builder.add_node("out_of_scope", out_of_scope)
+    router_builder.add_node("access_denied", access_denied)
 
     router_builder.add_edge(START, "llm_classify_intent")
+    router_builder.add_edge("llm_classify_intent", "check_access")
     router_builder.add_conditional_edges(
-        "llm_classify_intent",
+        "check_access",
         route_decision,
         {
             "commercial": "commercial_agent",
             "technical": "technical_agent",
-            "out_of_scope": "out_of_scope"
+            "out_of_scope": "out_of_scope",
+            "access_denied": "access_denied",
         },
     )
     router_builder.add_edge("commercial_agent", END)
     router_builder.add_edge("technical_agent", END)
     router_builder.add_edge("out_of_scope", END)
+    router_builder.add_edge("access_denied", END)
     return router_builder.compile()
