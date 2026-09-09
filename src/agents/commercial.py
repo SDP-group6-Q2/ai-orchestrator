@@ -10,6 +10,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from src.context import AgentContext
 from src.security.access import (
+    ACCESS_DENIED_OR_UNAVAILABLE,
     can_access_commercial_data,
     get_user_context,
 )
@@ -30,9 +31,6 @@ from src.tools.quotes_tools import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-_ACCESS_DENIED = "ACCESS_DENIED_OR_UNAVAILABLE"
 
 
 _SYSTEM_PROMPT = (
@@ -126,7 +124,7 @@ def get_quote_details(quote_id: str, runtime: ToolRuntime[AgentContext]) -> dict
     """Return details of a quote accessible to the current user."""
     company_id = _authorized_company_id(runtime)
     if company_id is None:
-        return _ACCESS_DENIED
+        return ACCESS_DENIED_OR_UNAVAILABLE
     return get_quote_details_for_company(quote_id, company_id)
 
 
@@ -135,7 +133,7 @@ def get_quote_revisions(quote_id: str, runtime: ToolRuntime[AgentContext]) -> li
     """Return revisions of a quote accessible to the current user."""
     company_id = _authorized_company_id(runtime)
     if company_id is None:
-        return _ACCESS_DENIED
+        return ACCESS_DENIED_OR_UNAVAILABLE
     return get_quote_revisions_for_company(quote_id, company_id)
 
 
@@ -144,7 +142,7 @@ def get_quote_lines(quote_revision_id: str, runtime: ToolRuntime[AgentContext]) 
     """Return quote lines accessible to the current user."""
     company_id = _authorized_company_id(runtime)
     if company_id is None:
-        return _ACCESS_DENIED
+        return ACCESS_DENIED_OR_UNAVAILABLE
     return get_quote_lines_for_company(quote_revision_id, company_id)
 
 
@@ -153,7 +151,7 @@ def get_company_quotes(runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
     """Return quotes belonging to the current user's company."""
     company_id = _authorized_company_id(runtime)
     if company_id is None:
-        return _ACCESS_DENIED
+        return ACCESS_DENIED_OR_UNAVAILABLE
     return get_company_quotes_secure(company_id)
 
 
@@ -162,7 +160,7 @@ def get_latest_quote_revision(quote_id: str, runtime: ToolRuntime[AgentContext])
     """Return the latest revision of a quote accessible to the current user."""
     company_id = _authorized_company_id(runtime)
     if company_id is None:
-        return _ACCESS_DENIED
+        return ACCESS_DENIED_OR_UNAVAILABLE
     return get_latest_quote_revision_for_company(quote_id, company_id)
 
 
@@ -171,7 +169,7 @@ def get_order_details(order_id: str, runtime: ToolRuntime[AgentContext]) -> dict
     """Return details of an order accessible to the current user."""
     company_id = _authorized_company_id(runtime)
     if company_id is None:
-        return _ACCESS_DENIED
+        return ACCESS_DENIED_OR_UNAVAILABLE
     return get_order_details_for_company(order_id, company_id)
 
 
@@ -180,7 +178,7 @@ def get_order_lines(order_id: str, runtime: ToolRuntime[AgentContext]) -> list[d
     """Return fulfillment lines for an order accessible to the current user."""
     company_id = _authorized_company_id(runtime)
     if company_id is None:
-        return _ACCESS_DENIED
+        return ACCESS_DENIED_OR_UNAVAILABLE
     return get_order_lines_for_company(order_id, company_id)
 
 
@@ -189,7 +187,7 @@ def get_orders_by_quote(quote_id: str, runtime: ToolRuntime[AgentContext]) -> li
     """Return orders created from a quote accessible to the current user."""
     company_id = _authorized_company_id(runtime)
     if company_id is None:
-        return _ACCESS_DENIED
+        return ACCESS_DENIED_OR_UNAVAILABLE
     return get_orders_by_quote_for_company(quote_id, company_id)
 
 
@@ -198,7 +196,7 @@ def get_company_orders(runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
     """Return orders belonging to the current user's company."""
     company_id = _authorized_company_id(runtime)
     if company_id is None:
-        return _ACCESS_DENIED
+        return ACCESS_DENIED_OR_UNAVAILABLE
     return get_company_orders_secure(company_id)
 
 

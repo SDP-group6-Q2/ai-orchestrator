@@ -3,18 +3,32 @@
 from __future__ import annotations
 import logging
 
+from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 import psycopg2
 import sqlparse
 
+from src.context import AgentContext
 from src.db.db import get_db
+from src.security.access import (
+    ACCESS_DENIED_OR_UNAVAILABLE,
+    can_access_technical_data,
+    get_user_context,
+)
 
 logger = logging.getLogger(__name__)
 
 
+def _is_authorized(runtime: ToolRuntime[AgentContext]) -> bool:
+    user_context = get_user_context(runtime.context.user_id)
+    return user_context is not None and can_access_technical_data(user_context)
+
+
 @tool
-def get_service_tables_descriptors():
+def get_service_tables_descriptors(runtime: ToolRuntime[AgentContext]):
     """Return the table descriptors for the service tickets database."""
+    if not _is_authorized(runtime):
+        return {"error": ACCESS_DENIED_OR_UNAVAILABLE}
     with get_db() as conn:
         with conn.cursor() as cursor:
             cursor.execute(
@@ -33,8 +47,10 @@ def get_service_tables_descriptors():
         }
 
 @tool
-def query_service_tickets(sql_query) -> list[dict]:
+def query_service_tickets(sql_query, runtime: ToolRuntime[AgentContext]) -> list[dict]:
     """Using an SQL statement, query service tickets."""
+    if not _is_authorized(runtime):
+        return [{"error": ACCESS_DENIED_OR_UNAVAILABLE}]
 
     logger.info("Querying service tickets with SQL: %s", sql_query)
 

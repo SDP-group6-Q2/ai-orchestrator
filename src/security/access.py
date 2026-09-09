@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from src.db.db import get_db
 
+ACCESS_DENIED_OR_UNAVAILABLE = "ACCESS_DENIED_OR_UNAVAILABLE"
+
 
 def get_user_context(user_id: str) -> dict | None:
     """
@@ -42,4 +44,15 @@ def can_access_commercial_data(user_context: dict) -> bool:
     return user_context.get("visibility") in {
         "full",
         "commercial",
+    }
+
+
+def can_access_technical_data(user_context: dict) -> bool:
+    """
+    Return True if the user can access technical/diagnostics information.
+    """
+
+    return user_context.get("visibility") in {
+        "full",
+        "technician",
     }

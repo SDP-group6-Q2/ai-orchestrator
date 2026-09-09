@@ -6,8 +6,10 @@ import logging
 
 from langchain.agents import create_agent
 from langchain.chat_models import BaseChatModel
+from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 
+from src.context import AgentContext
 from src.tools import (query_telemetry_readings, get_telemetry_tables_descriptors)
 
 logger = logging.getLogger(__name__)
@@ -24,7 +26,12 @@ _SYSTEM_PROMPT = (
 
 	"If no telemetry data is relevant, say you cannot answer the question based on the available readings. "
 	"Do not include technical interpretation or conclusion to presented data, only provide the data itself."
-	"Keep the answer concise and practical, providing necessary data."
+	"Keep the answer concise and practical, providing necessary data.\n\n"
+
+	"- If a tool returns ACCESS_DENIED_OR_UNAVAILABLE, say you cannot access "
+	"the requested telemetry data.\n"
+	"- Never speculate that inaccessible telemetry data was cancelled, deleted, "
+	"entered incorrectly or does not exist.\n"
 )
 
 def make_diagnostics_tool(llm: BaseChatModel):
@@ -32,11 +39,12 @@ def make_diagnostics_tool(llm: BaseChatModel):
 		model=llm,
 		tools=[query_telemetry_readings, get_telemetry_tables_descriptors],
 		system_prompt=_SYSTEM_PROMPT,
+		context_schema=AgentContext,
 	)
 
 	# TODO: Evaluate truthfulness of the answer executing same SQL queries and comparing the results with the answer
 	@tool
-	def diagnostics_agent(request: str, machine_id: str) -> str:
+	def diagnostics_agent(request: str, machine_id: str, runtime: ToolRuntime[AgentContext]) -> str:
 		"""Ask the diagnostics telemetry specialist about live sensor readings, error states, cycle counts, or the operational health of a specific machine. Always pass the machine_id from the current conversation context."""
 		logger.info("diagnosticsAgent invoked | request=%r machine_id=%r", request, machine_id)
 
@@ -45,7 +53,7 @@ def make_diagnostics_tool(llm: BaseChatModel):
 			{"role": "user", "content": "The machine ID is: {}".format(machine_id)},
 		]
 		try:
-			result = agent.invoke({"messages": messages})
+			result = agent.invoke({"messages": messages}, context=runtime.context)
 			response = result["messages"][-1].content
 		except Exception:
 			logger.warning("diagnosticsAgent could not produce a grounded answer", exc_info=True)
