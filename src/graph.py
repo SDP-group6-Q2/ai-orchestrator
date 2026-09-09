@@ -11,6 +11,7 @@ from langgraph.graph.message import RemoveMessage
 
 
 from src.state import GraphState as State
+from src.context import AgentContext
 
 from src.agents import (make_commercial_agent, make_technical_agent)
 
@@ -106,7 +107,7 @@ def build_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):
 
     router = llm.with_structured_output(Route)
 
-    router_builder = StateGraph(State)
+    router_builder = StateGraph(State, context_schema=AgentContext)
     router_builder.add_node("llm_classify_intent", llm_classify_intent)
     router_builder.add_node("commercial_agent", make_commercial_agent(llm, checkpointer=checkpointer))
     router_builder.add_node("technical_agent", make_technical_agent(llm, checkpointer=checkpointer))

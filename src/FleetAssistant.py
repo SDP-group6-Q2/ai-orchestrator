@@ -5,10 +5,10 @@
 from __future__ import annotations
 
 from langchain_ollama import ChatOllama
-import uuid
 
 from typing import cast, TypedDict
 
+from src.context import AgentContext
 from src.graph import build_graph
 from src.state import GraphState
 
@@ -36,10 +36,13 @@ class FleetAssistant:
         self.llm = ChatOllama(model=model, base_url=llama_base_url)
 
         self._checkpointer = InMemorySaver()
-        self.config = {"configurable": {"thread_id": uuid.uuid4()}}
 
         self._graph = build_graph(llm = self.llm, checkpointer=self._checkpointer)
 
+    def _config_for(self, user_id: str) -> dict:
+        # Keyed on user_id (not a fixed uuid generated once in __init__) so that
+        # different users' checkpointed conversations never share a thread.
+        return {"configurable": {"thread_id": user_id}}
 
     def run(
         self,
@@ -48,7 +51,7 @@ class FleetAssistant:
         machine_id: str,
         history: list[HistoryTurn] | None = None,
     ) -> GraphState:
-        context = SystemMessage(
+        context_message = SystemMessage(
             content=(
                 f"Current user_id: {user_id}. Current machine_id: {machine_id}. "
                 "Use this machine_id for tool calls unless the user names a different machine."
@@ -57,9 +60,10 @@ class FleetAssistant:
         prior_messages = _history_to_messages(history) if history else []
         result = self._graph.invoke(
             {
-                "messages": [context, *prior_messages, HumanMessage(content=question)],
+                "messages": [context_message, *prior_messages, HumanMessage(content=question)],
             }, # type: ignore
-            config=self.config # type: ignore
+            config=self._config_for(user_id), # type: ignore
+            context=AgentContext(user_id=user_id, machine_id=machine_id),
         )
         return cast(GraphState, result)
 

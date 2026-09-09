@@ -4,9 +4,11 @@ import logging
 
 from langchain.agents import create_agent
 from langchain.chat_models import BaseChatModel
+from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
+from src.context import AgentContext
 from src.security.access import (
     can_access_commercial_data,
     get_user_context,
@@ -28,6 +30,9 @@ from src.tools.quotes_tools import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+_ACCESS_DENIED = "ACCESS_DENIED_OR_UNAVAILABLE"
 
 
 _SYSTEM_PROMPT = (
@@ -85,7 +90,7 @@ _SYSTEM_PROMPT = (
     "function metadata or internal source references.\n"
     "- Do not include technical citations or assistant/function call traces.\n"
     "- Keep answers concise, readable and practical.\n\n"
-    
+
     "- If a tool returns ACCESS_DENIED_OR_UNAVAILABLE, tell the user that "
     "they cannot access commercial information for the requested resource.\n"
     "- Never speculate that an inaccessible resource was cancelled, deleted, "
@@ -103,106 +108,121 @@ _SYSTEM_PROMPT = (
 )
 
 
+def _authorized_company_id(runtime: ToolRuntime[AgentContext]) -> str | None:
+    """Resolve the calling user's company from trusted run context, re-checked on every call.
+
+    `runtime.context` comes from `graph.invoke(..., context=...)`, set by FleetAssistant
+    from the authenticated request -- never from LLM-controlled tool arguments -- so a
+    prompt-injected or hallucinated company id can never reach the `_for_company` queries.
+    """
+    user_context = get_user_context(runtime.context.user_id)
+    if user_context is None or not can_access_commercial_data(user_context):
+        return None
+    return user_context["companyId"]
+
+
+@tool
+def get_quote_details(quote_id: str, runtime: ToolRuntime[AgentContext]) -> dict | str | None:
+    """Return details of a quote accessible to the current user."""
+    company_id = _authorized_company_id(runtime)
+    if company_id is None:
+        return _ACCESS_DENIED
+    return get_quote_details_for_company(quote_id, company_id)
+
+
+@tool
+def get_quote_revisions(quote_id: str, runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
+    """Return revisions of a quote accessible to the current user."""
+    company_id = _authorized_company_id(runtime)
+    if company_id is None:
+        return _ACCESS_DENIED
+    return get_quote_revisions_for_company(quote_id, company_id)
+
+
+@tool
+def get_quote_lines(quote_revision_id: str, runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
+    """Return quote lines accessible to the current user."""
+    company_id = _authorized_company_id(runtime)
+    if company_id is None:
+        return _ACCESS_DENIED
+    return get_quote_lines_for_company(quote_revision_id, company_id)
+
+
+@tool
+def get_company_quotes(runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
+    """Return quotes belonging to the current user's company."""
+    company_id = _authorized_company_id(runtime)
+    if company_id is None:
+        return _ACCESS_DENIED
+    return get_company_quotes_secure(company_id)
+
+
+@tool
+def get_latest_quote_revision(quote_id: str, runtime: ToolRuntime[AgentContext]) -> dict | str | None:
+    """Return the latest revision of a quote accessible to the current user."""
+    company_id = _authorized_company_id(runtime)
+    if company_id is None:
+        return _ACCESS_DENIED
+    return get_latest_quote_revision_for_company(quote_id, company_id)
+
+
+@tool
+def get_order_details(order_id: str, runtime: ToolRuntime[AgentContext]) -> dict | str | None:
+    """Return details of an order accessible to the current user."""
+    company_id = _authorized_company_id(runtime)
+    if company_id is None:
+        return _ACCESS_DENIED
+    return get_order_details_for_company(order_id, company_id)
+
+
+@tool
+def get_order_lines(order_id: str, runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
+    """Return fulfillment lines for an order accessible to the current user."""
+    company_id = _authorized_company_id(runtime)
+    if company_id is None:
+        return _ACCESS_DENIED
+    return get_order_lines_for_company(order_id, company_id)
+
+
+@tool
+def get_orders_by_quote(quote_id: str, runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
+    """Return orders created from a quote accessible to the current user."""
+    company_id = _authorized_company_id(runtime)
+    if company_id is None:
+        return _ACCESS_DENIED
+    return get_orders_by_quote_for_company(quote_id, company_id)
+
+
+@tool
+def get_company_orders(runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
+    """Return orders belonging to the current user's company."""
+    company_id = _authorized_company_id(runtime)
+    if company_id is None:
+        return _ACCESS_DENIED
+    return get_company_orders_secure(company_id)
+
+
+_TOOLS = [
+    get_quote_details,
+    get_quote_revisions,
+    get_quote_lines,
+    get_company_quotes,
+    get_latest_quote_revision,
+    get_order_details,
+    get_order_lines,
+    get_orders_by_quote,
+    get_company_orders,
+]
+
+
 def make_commercial_agent(
     llm: BaseChatModel,
-    user_id: str,
     checkpointer: BaseCheckpointSaver | None = None,
 ):
-    user_context = get_user_context(user_id)
-
-    if user_context is None:
-        raise ValueError(f"Unknown user: {user_id}")
-
-    if not can_access_commercial_data(user_context):
-        raise PermissionError(
-            f"User {user_id} is not allowed to access commercial data."
-        )
-
-    company_id = user_context["companyId"]
-
-    @tool
-    def get_quote_details(quote_id: str) -> dict | None:
-        """Return details of a quote accessible to the current user."""
-        return get_quote_details_for_company(
-            quote_id,
-            company_id,
-        )
-
-    @tool
-    def get_quote_revisions(quote_id: str) -> list[dict]:
-        """Return revisions of a quote accessible to the current user."""
-        return get_quote_revisions_for_company(
-            quote_id,
-            company_id,
-        )
-
-    @tool
-    def get_quote_lines(quote_revision_id: str) -> list[dict]:
-        """Return quote lines accessible to the current user."""
-        return get_quote_lines_for_company(
-            quote_revision_id,
-            company_id,
-        )
-
-    @tool
-    def get_company_quotes() -> list[dict]:
-        """Return quotes belonging to the current user's company."""
-        return get_company_quotes_secure(company_id)
-
-    @tool
-    def get_latest_quote_revision(
-        quote_id: str,
-    ) -> dict | None:
-        """Return the latest revision of a quote accessible to the current user."""
-        return get_latest_quote_revision_for_company(
-            quote_id,
-            company_id,
-        )
-
-    @tool
-    def get_order_details(order_id: str) -> dict | None:
-        """Return details of an order accessible to the current user."""
-        return get_order_details_for_company(
-            order_id,
-            company_id,
-        )
-
-    @tool
-    def get_order_lines(order_id: str) -> list[dict]:
-        """Return fulfillment lines for an order accessible to the current user."""
-        return get_order_lines_for_company(
-            order_id,
-            company_id,
-        )
-
-    @tool
-    def get_orders_by_quote(quote_id: str) -> list[dict]:
-        """Return orders created from a quote accessible to the current user."""
-        return get_orders_by_quote_for_company(
-            quote_id,
-            company_id,
-        )
-
-    @tool
-    def get_company_orders() -> list[dict]:
-        """Return orders belonging to the current user's company."""
-        return get_company_orders_secure(company_id)
-
-    tools = [
-        get_quote_details,
-        get_quote_revisions,
-        get_quote_lines,
-        get_company_quotes,
-        get_latest_quote_revision,
-        get_order_details,
-        get_order_lines,
-        get_orders_by_quote,
-        get_company_orders,
-    ]
-
     return create_agent(
         model=llm,
-        tools=tools,
+        tools=_TOOLS,
         system_prompt=_SYSTEM_PROMPT,
         checkpointer=checkpointer,
+        context_schema=AgentContext,
     )

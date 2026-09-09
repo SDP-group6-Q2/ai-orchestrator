@@ -15,11 +15,11 @@ def get_user_context(user_id: str) -> dict | None:
 
     query = """
         SELECT
-            "userId",
-            "companyId",
+            "userid",
+            "companyid",
             "visibility"
         FROM users
-        WHERE "userId" = %s
+        WHERE "userid" = %s
         LIMIT 1;
     """
 
