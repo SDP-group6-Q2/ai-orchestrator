@@ -32,6 +32,7 @@ _ROUTER_SYSTEM_PROMPT = (
     " - Analyse machine health and detect anomalies"
     " - Identify performance degradation"
     " - Correlate alarms with maintenance history "
+    " - Consult information about maintenance tickets and their status; "
 
     " **commercial: **  "
     " - Retrieve quotation and order history; "

@@ -8,6 +8,7 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from src.agents.manuals import make_manuals_tool
 from src.agents.diagnostics import make_diagnostics_tool
+from src.config import REFERENCE_DATE
 from src.context import AgentContext
 
 from src.tools import (get_company_maintenance_tickets, get_company_machines, get_machine_details)
@@ -15,6 +16,9 @@ from src.tools import (get_company_maintenance_tickets, get_company_machines, ge
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
+	f"Today's date is {REFERENCE_DATE}. Use it for any relative date reasoning "
+	"(e.g. how overdue a maintenance ticket is, or how recent an alarm is).\n\n"
+
 	"You are a technical expert on AROL company machinery. The company produces automatic machines and lines for the production of capping/closure of bottles, jars, and other containers."
 	"Your goal is to understand a costumer request and provide a grounded answer, using available expert tools: diagnostics and manuals."
 	"You also have access to open maintenance tickets for the machine, and you can query them to provide a more complete answer."

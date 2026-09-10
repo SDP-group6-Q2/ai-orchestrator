@@ -9,6 +9,7 @@ from langchain.chat_models import BaseChatModel
 from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 
+from src.config import REFERENCE_DATE
 from src.context import AgentContext
 from src.tools import (
 	get_latest_telemetry_snapshot,
@@ -20,6 +21,9 @@ from src.tools import (
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = (
+	f"Today's date is {REFERENCE_DATE}. Use it for any relative date reasoning "
+	"(e.g. how recent a telemetry reading or alarm is).\n\n"
+
 	"You are a diagnostics agent on AROL company machinery. The company produces automatic machines and lines for the production of capping/closure of bottles, jars, and other containers. "
 	"Your goal is to understand request and investigate real data from the machine to provide a grounded answer."
 

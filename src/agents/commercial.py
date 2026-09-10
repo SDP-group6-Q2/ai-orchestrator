@@ -8,6 +8,7 @@ from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
+from src.config import REFERENCE_DATE
 from src.context import AgentContext
 from src.security.access import (
     ACCESS_DENIED_OR_UNAVAILABLE,
@@ -34,6 +35,9 @@ logger = logging.getLogger(__name__)
 
 
 _SYSTEM_PROMPT = (
+    f"Today's date is {REFERENCE_DATE}. Use it for any relative date reasoning "
+    "(e.g. whether a quote is still valid, or how recent an order is).\n\n"
+
     "You are the commercial support agent for AROL capping machines. "
     "You answer questions about quotations, quote revisions, orders, "
     "order status, shipment status, fulfillment and the commercial "
