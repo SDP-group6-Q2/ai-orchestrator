@@ -26,8 +26,10 @@ from src.tools.service_tools import (
 )
 
 from src.tools.telemetry_tools import (
-    query_telemetry_readings,
-    get_telemetry_tables_descriptors,
+    get_latest_telemetry_snapshot,
+    get_telemetry_history,
+    get_alarm_history,
+    get_maintenance_history,
 )
 
 from src.tools.manuals_tools import (
@@ -69,8 +71,10 @@ __all__ = [
     "open_new_ticket",
 
     # Telemetry
-    "query_telemetry_readings",
-    "get_telemetry_tables_descriptors",
+    "get_latest_telemetry_snapshot",
+    "get_telemetry_history",
+    "get_alarm_history",
+    "get_maintenance_history",
 
     # Fleet
     "get_fleet_descriptors",

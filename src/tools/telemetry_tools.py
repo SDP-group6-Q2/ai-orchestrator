@@ -1,12 +1,17 @@
-"""Telemetry retrieval helpers used by the IoT agent."""
+"""Telemetry retrieval helpers used by the diagnostics agent.
+
+Purpose-built, parameterized queries (mirroring src/tools/quotes_tools.py's
+`_for_company` pattern) instead of freeform LLM-authored SQL: each tool takes a
+machine_id and verifies, via `machine_lookup`, that the machine belongs to the
+requesting user's company before querying -- tenant scoping that a freeform SQL
+tool could never safely enforce, since the LLM controls the whole query shape.
+"""
 
 from __future__ import annotations
 import logging
 
 from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
-import psycopg2
-import sqlparse
 
 from src.context import AgentContext
 from src.db.db import get_db
@@ -15,73 +20,169 @@ from src.security.access import (
     can_access_technical_data,
     get_user_context,
 )
+from src.tools.fleet_directory import machine_lookup
 
 logger = logging.getLogger(__name__)
 
 
-def _is_authorized(runtime: ToolRuntime[AgentContext]) -> bool:
+def _authorized_machine(runtime: ToolRuntime[AgentContext], machine_id: str) -> bool:
     user_context = get_user_context(runtime.context.user_id)
-    return user_context is not None and can_access_technical_data(user_context)
+    if user_context is None or not can_access_technical_data(user_context):
+        return False
+    machine = machine_lookup(machine_id)
+    return machine is not None and machine["company_id"] == user_context["companyId"]
 
 
 @tool
-def get_telemetry_tables_descriptors(runtime: ToolRuntime[AgentContext]):
-    """Return the table descriptors for the telemetry readings database."""
-    if not _is_authorized(runtime):
-        return {"error": ACCESS_DENIED_OR_UNAVAILABLE}
-    with get_db() as con:
-        with con.cursor() as cursor:
-            cursor.execute(
-                """
-                SELECT column_name, data_type
-                FROM information_schema.columns
-                WHERE table_name = %s
-                ORDER BY ordinal_position;
-                """,
-                ("telemetrysnapshots",),
-            )
-            telemetry_descriptors = [dict(row) for row in cursor.fetchall()]
+def get_latest_telemetry_snapshot(machine_id: str, runtime: ToolRuntime[AgentContext]) -> dict | str | None:
+    """Return the most recent telemetry snapshot (operational status, production rate,
+    uptime %, alarm count, temperature, energy usage, health note) for a machine."""
+    if not _authorized_machine(runtime, machine_id):
+        return ACCESS_DENIED_OR_UNAVAILABLE
 
-            cursor.execute(
-                """
-                SELECT column_name, data_type
-                FROM information_schema.columns
-                WHERE table_name = %s
-                ORDER BY ordinal_position;
-                """,
-                ("alarms",),
-            )
-            alarms_descriptors = [dict(row) for row in cursor.fetchall()]
+    query = """
+        SELECT
+            telemetryid,
+            machineid,
+            "timestamp",
+            operationalstatus,
+            productionratebph,
+            uptimepercentage,
+            alarmcount,
+            temperaturec,
+            energykwh,
+            healthnote
+        FROM telemetrysnapshots
+        WHERE machineid = %s
+        ORDER BY "timestamp" DESC
+        LIMIT 1;
+    """
 
-    return {
-        "telemetrysnapshots": telemetry_descriptors,
-        "alarms": alarms_descriptors
-    }
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query, (machine_id,))
+            row = cursor.fetchone()
+
+            if row is None:
+                return None
+
+            return dict(row)
+
 
 @tool
-def query_telemetry_readings(sql_query, runtime: ToolRuntime[AgentContext]) -> list[dict]:
-    """Using an SQL statement, query telemetry readings for a given machine and optional metric."""
-    if not _is_authorized(runtime):
-        return [{"error": ACCESS_DENIED_OR_UNAVAILABLE}]
+def get_telemetry_history(
+    machine_id: str,
+    runtime: ToolRuntime[AgentContext],
+    since: str | None = None,
+    until: str | None = None,
+) -> list[dict] | str:
+    """Return telemetry snapshots for a machine ordered oldest to newest, for trend or
+    performance-degradation analysis. Optionally restrict to a time range with `since`/`until`
+    (timestamps as they appear in the data, e.g. from a previous tool result)."""
+    if not _authorized_machine(runtime, machine_id):
+        return ACCESS_DENIED_OR_UNAVAILABLE
 
-    # 1. Prevent empty strings or multi-statement injections (e.g., "SELECT 1; DROP TABLE users;")
-    statements = [s for s in sqlparse.parse(sql_query) if s.token_first(skip_cm=True) is not None]
-    if len(statements) != 1:
-        return [{"error": "Invalid Query: Exactly one SQL statement is allowed."}]
+    conditions = ['machineid = %s']
+    params: list[str] = [machine_id]
+    if since is not None:
+        conditions.append('"timestamp" >= %s')
+        params.append(since)
+    if until is not None:
+        conditions.append('"timestamp" <= %s')
+        params.append(until)
 
-    # 2. Check the statement type explicitly
-    statement = statements[0]
-    if statement.get_type() != "SELECT":
-        return [{"error": f"Security Alert: Disallowed operation type '{statement.get_type()}'. Only SELECT queries are permitted."}]
+    query = f"""
+        SELECT
+            telemetryid,
+            machineid,
+            "timestamp",
+            operationalstatus,
+            productionratebph,
+            uptimepercentage,
+            alarmcount,
+            temperaturec,
+            energykwh,
+            healthnote
+        FROM telemetrysnapshots
+        WHERE {' AND '.join(conditions)}
+        ORDER BY "timestamp" ASC;
+    """
 
-    # 3. Safe to execute if it passes the checks
-    try:
-        with get_db() as con:
-            with con.cursor() as cursor:
-                cursor.execute(sql_query)
-                result = [dict(row) for row in cursor.fetchall()]
-    except psycopg2.Error as e:
-        logger.warning("Query execution failed for %r: %s", sql_query, e)
-        return [{"error": f"Query execution failed: {e}"}]
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
 
-    return result
+
+@tool
+def get_alarm_history(
+    machine_id: str,
+    runtime: ToolRuntime[AgentContext],
+    since: str | None = None,
+    until: str | None = None,
+) -> list[dict] | str:
+    """Return alarms for a machine ordered newest to oldest, including alarm code,
+    severity and status. Optionally restrict to a time range with `since`/`until`."""
+    if not _authorized_machine(runtime, machine_id):
+        return ACCESS_DENIED_OR_UNAVAILABLE
+
+    conditions = ['machineid = %s']
+    params: list[str] = [machine_id]
+    if since is not None:
+        conditions.append('"timestamp" >= %s')
+        params.append(since)
+    if until is not None:
+        conditions.append('"timestamp" <= %s')
+        params.append(until)
+
+    query = f"""
+        SELECT
+            alarmid,
+            machineid,
+            "timestamp",
+            alarmcode,
+            severity,
+            alarmstatus
+        FROM alarms
+        WHERE {' AND '.join(conditions)}
+        ORDER BY "timestamp" DESC;
+    """
+
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
+
+
+@tool
+def get_maintenance_history(machine_id: str, runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
+    """Return maintenance tickets for a machine, newest first, each joined with the
+    alarm that triggered it (when there is one) -- for correlating alarms with
+    maintenance history."""
+    if not _authorized_machine(runtime, machine_id):
+        return ACCESS_DENIED_OR_UNAVAILABLE
+
+    query = """
+        SELECT
+            mt.ticketid,
+            mt.machineid,
+            mt.alarmid,
+            mt.tickettype,
+            mt.ticketstatus,
+            mt.priority,
+            mt.createddate,
+            mt.ownerrole,
+            a.alarmcode,
+            a.severity,
+            a.alarmstatus,
+            a."timestamp" AS alarmtimestamp
+        FROM maintenancetickets mt
+        LEFT JOIN alarms a ON a.alarmid = mt.alarmid
+        WHERE mt.machineid = %s
+        ORDER BY mt.createddate DESC;
+    """
+
+    with get_db() as conn:
+        with conn.cursor() as cursor:
+            cursor.execute(query, (machine_id,))
+            return [dict(row) for row in cursor.fetchall()]

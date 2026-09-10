@@ -10,7 +10,12 @@ from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 
 from src.context import AgentContext
-from src.tools import (query_telemetry_readings, get_telemetry_tables_descriptors)
+from src.tools import (
+	get_latest_telemetry_snapshot,
+	get_telemetry_history,
+	get_alarm_history,
+	get_maintenance_history,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +23,10 @@ _SYSTEM_PROMPT = (
 	"You are a diagnostics agent on AROL company machinery. The company produces automatic machines and lines for the production of capping/closure of bottles, jars, and other containers. "
 	"Your goal is to understand request and investigate real data from the machine to provide a grounded answer."
 
-	"Use the get_telemetry_tables_descriptors tool to understand the structure of the telemetry data before querying it."
-	"Use query_telemetry_readings as the primary data source for telemetry analysis, enabling predictive analysis, health monitoring, and autonomous diagnostics."
+	"Use get_latest_telemetry_snapshot for the machine's current operational status, production rate, uptime, alarm count, temperature, energy usage and health note. "
+	"Use get_telemetry_history for trends over time or to detect performance degradation, optionally narrowed with since/until. "
+	"Use get_alarm_history for the machine's alarms (code, severity, status), optionally narrowed with since/until. "
+	"Use get_maintenance_history to correlate alarms with maintenance tickets raised for the machine. "
 
 	"Before responding, make all relevant queries to provide growding data for a technical expert. "
 	"Answer only once you have grounded evidence from the tool. "
@@ -37,7 +44,12 @@ _SYSTEM_PROMPT = (
 def make_diagnostics_tool(llm: BaseChatModel):
 	agent = create_agent(
 		model=llm,
-		tools=[query_telemetry_readings, get_telemetry_tables_descriptors],
+		tools=[
+			get_latest_telemetry_snapshot,
+			get_telemetry_history,
+			get_alarm_history,
+			get_maintenance_history,
+		],
 		system_prompt=_SYSTEM_PROMPT,
 		context_schema=AgentContext,
 	)
