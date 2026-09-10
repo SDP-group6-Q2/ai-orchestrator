@@ -10,7 +10,7 @@ from src.agents.manuals import make_manuals_tool
 from src.agents.diagnostics import make_diagnostics_tool
 from src.context import AgentContext
 
-from src.tools import (query_service_tickets, get_service_tables_descriptors, get_fleet_descriptors, query_fleet)
+from src.tools import (get_company_maintenance_tickets, get_company_machines, get_machine_details)
 
 logger = logging.getLogger(__name__)
 
@@ -19,12 +19,11 @@ _SYSTEM_PROMPT = (
 	"Your goal is to understand a costumer request and provide a grounded answer, using available expert tools: diagnostics and manuals."
 	"You also have access to open maintenance tickets for the machine, and you can query them to provide a more complete answer."
 
-	"Use the get_fleet_descriptors tool to understand the structure of the fleet data before querying it."
-	"Use query_fleet with an SQL query to fetch information about the fleet of machines, inlcuding models, locations, and other details."
-    "Use the diagnostics_agent to ask questions about the machine's live sensor readings, error states, cycle counts, or operational health. "
+	"Use get_company_machines to list every machine belonging to the current user's company, including model details. "
+	"Use get_machine_details for a specific machine's details (including its model) by machine_id. "
+    "Use the diagnostics_agent to ask questions about the machine's live sensor readings, error states, or operational health. "
 	"Use the manuals_agent to ask technical questions about the machine's operation, maintenance, or troubleshooting."
-	"Use the get_service_tables_descriptors tool to understand the structure of the service tickets data before querying it."
-	"Use query_service_tickets to fetch the user's open and past support tickets. "
+	"Use get_company_maintenance_tickets to fetch the user's company's open and past support tickets. "
 
 	"Answer only once you have grounded evidence from the tool, using, when possible, both diagnostics data and manuals retrieved information. "
 	"Keep the answer concise and practical.\n\n"
@@ -39,10 +38,9 @@ def make_technical_agent(llm: BaseChatModel, checkpointer: BaseCheckpointSaver |
 	tools = [
         make_manuals_tool(llm),
         make_diagnostics_tool(llm),
-		get_service_tables_descriptors,
-		query_service_tickets,
-		get_fleet_descriptors,
-		query_fleet,
+		get_company_maintenance_tickets,
+		get_company_machines,
+		get_machine_details,
     ]
 
 	agent = create_agent(

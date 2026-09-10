@@ -10,8 +10,8 @@ def get_user_context(user_id: str) -> dict | None:
     Return the security context for a user.
 
     The returned dictionary contains:
-    - userId
-    - companyId
+    - userid
+    - companyid
     - visibility
     """
 

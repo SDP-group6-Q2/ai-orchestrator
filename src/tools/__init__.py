@@ -20,9 +20,7 @@ from src.tools.quotes_tools import (
 )
 
 from src.tools.service_tools import (
-    open_new_ticket,
-    query_service_tickets,
-    get_service_tables_descriptors,
+    get_company_maintenance_tickets,
 )
 
 from src.tools.telemetry_tools import (
@@ -37,8 +35,8 @@ from src.tools.manuals_tools import (
 )
 
 from src.tools.fleet_tools import (
-    query_fleet,
-    get_fleet_descriptors,
+    get_company_machines,
+    get_machine_details,
 )
 
 __all__ = [
@@ -66,9 +64,7 @@ __all__ = [
     "get_company_orders",
 
     # Service
-    "get_service_tables_descriptors",
-    "query_service_tickets",
-    "open_new_ticket",
+    "get_company_maintenance_tickets",
 
     # Telemetry
     "get_latest_telemetry_snapshot",
@@ -77,8 +73,8 @@ __all__ = [
     "get_maintenance_history",
 
     # Fleet
-    "get_fleet_descriptors",
-    "query_fleet",
+    "get_company_machines",
+    "get_machine_details",
 
     # Manuals
     "get_manual_excerpts",

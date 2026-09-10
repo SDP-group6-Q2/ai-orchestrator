@@ -30,7 +30,7 @@ def _authorized_machine(runtime: ToolRuntime[AgentContext], machine_id: str) -> 
     if user_context is None or not can_access_technical_data(user_context):
         return False
     machine = machine_lookup(machine_id)
-    return machine is not None and machine["company_id"] == user_context["companyId"]
+    return machine is not None and machine["company_id"] == user_context["companyid"]
 
 
 @tool

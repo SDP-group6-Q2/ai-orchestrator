@@ -116,7 +116,7 @@ def _authorized_company_id(runtime: ToolRuntime[AgentContext]) -> str | None:
     user_context = get_user_context(runtime.context.user_id)
     if user_context is None or not can_access_commercial_data(user_context):
         return None
-    return user_context["companyId"]
+    return user_context["companyid"]
 
 
 @tool
