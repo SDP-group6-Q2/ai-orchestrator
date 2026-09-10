@@ -131,14 +131,14 @@ def get_quote_details(quote_id: str) -> dict | None:
 
     query = """
         SELECT
-            "quoteId",
-            "companyId",
-            "currency",
-            "createdAt",
-            "validUntil",
-            "description"
+            quoteid AS "quoteId",
+            companyid AS "companyId",
+            currency,
+            createdat AS "createdAt",
+            validuntil AS "validUntil",
+            description
         FROM quotes
-        WHERE "quoteId" = %s
+        WHERE quoteid = %s
         LIMIT 1;
     """
 
@@ -164,16 +164,16 @@ def get_quote_revisions(quote_id: str) -> list[dict]:
 
     query = """
         SELECT
-            "quoteRevisionId",
-            "quoteId",
-            "revisionNumber",
-            "revisionStatus",
-            "issuedAt",
-            "discountRate",
-            "changeSummary"
+            quoterevisionid AS "quoteRevisionId",
+            quoteid AS "quoteId",
+            revisionnumber AS "revisionNumber",
+            revisionstatus AS "revisionStatus",
+            issuedat AS "issuedAt",
+            discountrate AS "discountRate",
+            changesummary AS "changeSummary"
         FROM quoterevisions
-        WHERE "quoteId" = %s
-        ORDER BY "revisionNumber" ASC;
+        WHERE quoteid = %s
+        ORDER BY revisionnumber ASC;
     """
 
     with get_db() as conn:
@@ -193,13 +193,13 @@ def get_quote_lines(quote_revision_id: str) -> list[dict]:
 
     query = """
         SELECT
-            "quoteLineId",
-            "quoteRevisionId",
-            "machineId",
-            "price",
-            "description"
+            quotelineid AS "quoteLineId",
+            quoterevisionid AS "quoteRevisionId",
+            machineid AS "machineId",
+            price,
+            description
         FROM quotelines
-        WHERE "quoteRevisionId" = %s;
+        WHERE quoterevisionid = %s;
     """
 
     with get_db() as conn:
@@ -218,15 +218,15 @@ def get_company_quotes(company_id: str) -> list[dict]:
 
     query = """
         SELECT
-            "quoteId",
-            "companyId",
-            "currency",
-            "createdAt",
-            "validUntil",
-            "description"
+            quoteid AS "quoteId",
+            companyid AS "companyId",
+            currency,
+            createdat AS "createdAt",
+            validuntil AS "validUntil",
+            description
         FROM quotes
-        WHERE "companyId" = %s
-        ORDER BY "createdAt" DESC;
+        WHERE companyid = %s
+        ORDER BY createdat DESC;
     """
 
     with get_db() as conn:
@@ -246,16 +246,16 @@ def get_latest_quote_revision(quote_id: str) -> dict | None:
 
     query = """
         SELECT
-            "quoteRevisionId",
-            "quoteId",
-            "revisionNumber",
-            "revisionStatus",
-            "issuedAt",
-            "discountRate",
-            "changeSummary"
+            quoterevisionid AS "quoteRevisionId",
+            quoteid AS "quoteId",
+            revisionnumber AS "revisionNumber",
+            revisionstatus AS "revisionStatus",
+            issuedat AS "issuedAt",
+            discountrate AS "discountRate",
+            changesummary AS "changeSummary"
         FROM quoterevisions
-        WHERE "quoteId" = %s
-        ORDER BY "revisionNumber" DESC
+        WHERE quoteid = %s
+        ORDER BY revisionnumber DESC
         LIMIT 1;
     """
 
@@ -279,15 +279,15 @@ def get_quote_details_for_company(
 
     query = """
         SELECT
-            "quoteId",
-            "companyId",
-            "currency",
-            "createdAt",
-            "validUntil",
-            "description"
+            quoteid AS "quoteId",
+            companyid AS "companyId",
+            currency,
+            createdat AS "createdAt",
+            validuntil AS "validUntil",
+            description
         FROM quotes
-        WHERE "quoteId" = %s
-          AND "companyId" = %s
+        WHERE quoteid = %s
+          AND companyid = %s
         LIMIT 1;
     """
 
@@ -316,19 +316,19 @@ def get_quote_revisions_for_company(
 
     query = """
         SELECT
-            qr."quoteRevisionId",
-            qr."quoteId",
-            qr."revisionNumber",
-            qr."revisionStatus",
-            qr."issuedAt",
-            qr."discountRate",
-            qr."changeSummary"
+            qr.quoterevisionid AS "quoteRevisionId",
+            qr.quoteid AS "quoteId",
+            qr.revisionnumber AS "revisionNumber",
+            qr.revisionstatus AS "revisionStatus",
+            qr.issuedat AS "issuedAt",
+            qr.discountrate AS "discountRate",
+            qr.changesummary AS "changeSummary"
         FROM quoterevisions qr
         JOIN quotes q
-            ON q."quoteId" = qr."quoteId"
-        WHERE qr."quoteId" = %s
-          AND q."companyId" = %s
-        ORDER BY qr."revisionNumber" ASC;
+            ON q.quoteid = qr.quoteid
+        WHERE qr.quoteid = %s
+          AND q.companyid = %s
+        ORDER BY qr.revisionnumber ASC;
     """
 
     with get_db() as conn:
@@ -351,19 +351,19 @@ def get_latest_quote_revision_for_company(
 
     query = """
         SELECT
-            qr."quoteRevisionId",
-            qr."quoteId",
-            qr."revisionNumber",
-            qr."revisionStatus",
-            qr."issuedAt",
-            qr."discountRate",
-            qr."changeSummary"
+            qr.quoterevisionid AS "quoteRevisionId",
+            qr.quoteid AS "quoteId",
+            qr.revisionnumber AS "revisionNumber",
+            qr.revisionstatus AS "revisionStatus",
+            qr.issuedat AS "issuedAt",
+            qr.discountrate AS "discountRate",
+            qr.changesummary AS "changeSummary"
         FROM quoterevisions qr
         JOIN quotes q
-            ON q."quoteId" = qr."quoteId"
-        WHERE qr."quoteId" = %s
-          AND q."companyId" = %s
-        ORDER BY qr."revisionNumber" DESC
+            ON q.quoteid = qr.quoteid
+        WHERE qr.quoteid = %s
+          AND q.companyid = %s
+        ORDER BY qr.revisionnumber DESC
         LIMIT 1;
     """
 
@@ -392,18 +392,18 @@ def get_quote_lines_for_company(
 
     query = """
         SELECT
-            ql."quoteLineId",
-            ql."quoteRevisionId",
-            ql."machineId",
-            ql."price",
-            ql."description"
+            ql.quotelineid AS "quoteLineId",
+            ql.quoterevisionid AS "quoteRevisionId",
+            ql.machineid AS "machineId",
+            ql.price,
+            ql.description
         FROM quotelines ql
         JOIN quoterevisions qr
-            ON qr."quoteRevisionId" = ql."quoteRevisionId"
+            ON qr.quoterevisionid = ql.quoterevisionid
         JOIN quotes q
-            ON q."quoteId" = qr."quoteId"
-        WHERE ql."quoteRevisionId" = %s
-          AND q."companyId" = %s;
+            ON q.quoteid = qr.quoteid
+        WHERE ql.quoterevisionid = %s
+          AND q.companyid = %s;
     """
 
     with get_db() as conn:
@@ -425,15 +425,15 @@ def get_company_quotes_secure(
 
     query = """
         SELECT
-            "quoteId",
-            "companyId",
-            "currency",
-            "createdAt",
-            "validUntil",
-            "description"
+            quoteid AS "quoteId",
+            companyid AS "companyId",
+            currency,
+            createdat AS "createdAt",
+            validuntil AS "validUntil",
+            description
         FROM quotes
-        WHERE "companyId" = %s
-        ORDER BY "createdAt" DESC;
+        WHERE companyid = %s
+        ORDER BY createdat DESC;
     """
 
     with get_db() as conn:

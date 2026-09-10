@@ -17,7 +17,7 @@ from src import FleetAssistant
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run FleetAssistant locally from the terminal.")
     parser.add_argument("--question", help="Single question to ask, then exit. Omit to start an interactive session.")
-    parser.add_argument("--user-id", default="local-user", help="User id to attach to the request.")
+    parser.add_argument("--user-id", default="USR-001", help="User id to attach to the request.")
     parser.add_argument("--machine-id", default="MCH-0001", type=str, help="Machine id to attach to the request.")
     parser.add_argument("--model", default="gpt-oss:20b-cloud", help="Ollama model name.")
     parser.add_argument("--base-url", default="http://localhost:11434", help="Ollama server base URL.")

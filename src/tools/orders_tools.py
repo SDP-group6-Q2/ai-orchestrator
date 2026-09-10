@@ -105,7 +105,7 @@ def query_orders(sql_query: str) -> list[dict]:
 
 
 @tool
-def get_order_details(order_id: str) -> dict | str:
+def get_order_details(order_id: str, company_id: str) -> dict | str:
     """Return details of an order accessible to the current user."""
 
     result = get_order_details_for_company(
@@ -136,11 +136,11 @@ def get_order_lines(order_id: str) -> list[dict]:
 
     query = """
         SELECT
-            "orderLineId",
-            "orderId",
-            "fulfillmentStatus"
+            orderlineid AS "orderLineId",
+            orderid AS "orderId",
+            fulfillmentstatus AS "fulfillmentStatus"
         FROM orderlines
-        WHERE "orderId" = %s;
+        WHERE orderid = %s;
     """
 
     with get_db() as conn:
@@ -160,18 +160,18 @@ def get_orders_by_quote(quote_id: str) -> list[dict]:
 
     query = """
         SELECT
-            "orderId",
-            "quoteId",
-            "companyId",
-            "orderStatus",
-            "orderDate",
-            "expectedDeliveryDate",
-            "shipmentStatus",
-            "currency",
-            "notes"
+            orderid AS "orderId",
+            quoteid AS "quoteId",
+            companyid AS "companyId",
+            orderstatus AS "orderStatus",
+            orderdate AS "orderDate",
+            expecteddeliverydate AS "expectedDeliveryDate",
+            shipmentstatus AS "shipmentStatus",
+            currency,
+            notes
         FROM orders
-        WHERE "quoteId" = %s
-        ORDER BY "orderDate" ASC;
+        WHERE quoteid = %s
+        ORDER BY orderdate ASC;
     """
 
     with get_db() as conn:
@@ -191,18 +191,18 @@ def get_company_orders(company_id: str) -> list[dict]:
 
     query = """
         SELECT
-            "orderId",
-            "quoteId",
-            "companyId",
-            "orderStatus",
-            "orderDate",
-            "expectedDeliveryDate",
-            "shipmentStatus",
-            "currency",
-            "notes"
+            orderid AS "orderId",
+            quoteid AS "quoteId",
+            companyid AS "companyId",
+            orderstatus AS "orderStatus",
+            orderdate AS "orderDate",
+            expecteddeliverydate AS "expectedDeliveryDate",
+            shipmentstatus AS "shipmentStatus",
+            currency,
+            notes
         FROM orders
-        WHERE "companyId" = %s
-        ORDER BY "orderDate" DESC;
+        WHERE companyid = %s
+        ORDER BY orderdate DESC;
     """
 
     with get_db() as conn:
@@ -217,18 +217,18 @@ def get_order_details_for_company(
 ) -> dict | None:
     query = """
         SELECT
-            "orderId",
-            "quoteId",
-            "companyId",
-            "orderStatus",
-            "orderDate",
-            "expectedDeliveryDate",
-            "shipmentStatus",
-            "currency",
-            "notes"
+            orderid AS "orderId",
+            quoteid AS "quoteId",
+            companyid AS "companyId",
+            orderstatus AS "orderStatus",
+            orderdate AS "orderDate",
+            expecteddeliverydate AS "expectedDeliveryDate",
+            shipmentstatus AS "shipmentStatus",
+            currency,
+            notes
         FROM orders
-        WHERE "orderId" = %s
-          AND "companyId" = %s
+        WHERE orderid = %s
+          AND companyid = %s
         LIMIT 1;
     """
 
@@ -256,14 +256,14 @@ def get_order_lines_for_company(
 
     query = """
         SELECT
-            ol."orderLineId",
-            ol."orderId",
-            ol."fulfillmentStatus"
+            ol.orderlineid AS "orderLineId",
+            ol.orderid AS "orderId",
+            ol.fulfillmentstatus AS "fulfillmentStatus"
         FROM orderlines ol
         JOIN orders o
-            ON o."orderId" = ol."orderId"
-        WHERE ol."orderId" = %s
-          AND o."companyId" = %s;
+            ON o.orderid = ol.orderid
+        WHERE ol.orderid = %s
+          AND o.companyid = %s;
     """
 
     with get_db() as conn:
@@ -286,19 +286,19 @@ def get_orders_by_quote_for_company(
 
     query = """
         SELECT
-            "orderId",
-            "quoteId",
-            "companyId",
-            "orderStatus",
-            "orderDate",
-            "expectedDeliveryDate",
-            "shipmentStatus",
-            "currency",
-            "notes"
+            orderid AS "orderId",
+            quoteid AS "quoteId",
+            companyid AS "companyId",
+            orderstatus AS "orderStatus",
+            orderdate AS "orderDate",
+            expecteddeliverydate AS "expectedDeliveryDate",
+            shipmentstatus AS "shipmentStatus",
+            currency,
+            notes
         FROM orders
-        WHERE "quoteId" = %s
-          AND "companyId" = %s
-        ORDER BY "orderDate" ASC;
+        WHERE quoteid = %s
+          AND companyid = %s
+        ORDER BY orderdate ASC;
     """
 
     with get_db() as conn:
@@ -320,18 +320,18 @@ def get_company_orders_secure(
 
     query = """
         SELECT
-            "orderId",
-            "quoteId",
-            "companyId",
-            "orderStatus",
-            "orderDate",
-            "expectedDeliveryDate",
-            "shipmentStatus",
-            "currency",
-            "notes"
+            orderid AS "orderId",
+            quoteid AS "quoteId",
+            companyid AS "companyId",
+            orderstatus AS "orderStatus",
+            orderdate AS "orderDate",
+            expecteddeliverydate AS "expectedDeliveryDate",
+            shipmentstatus AS "shipmentStatus",
+            currency,
+            notes
         FROM orders
-        WHERE "companyId" = %s
-        ORDER BY "orderDate" DESC;
+        WHERE companyid = %s
+        ORDER BY orderdate DESC;
     """
 
     with get_db() as conn:
