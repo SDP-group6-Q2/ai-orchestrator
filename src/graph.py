@@ -15,7 +15,7 @@ from src.state import GraphState as State
 from src.context import AgentContext
 from src.security.access import (
     can_access_commercial_data,
-    can_access_technical_data,
+    can_access_machine_identity,
     get_user_context,
 )
 
@@ -87,6 +87,15 @@ def build_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):
         # technical question without calling any gated tool at all (e.g. from hallucinated
         # or conversation-history "knowledge"), there's no tool call to deny -- routing the
         # unauthorized intent away before the specialist agent ever runs closes that gap.
+        #
+        # The "technical" intent spans two spec domains that don't share a visibility
+        # requirement: machine identity/manuals (every tier, per the access model) and
+        # telemetry/alarms/tickets (technician/full only). This gate only checks the
+        # wider one -- can_access_machine_identity -- so it can't wrongly turn away a
+        # commercial user asking about their own machine or its manual. The narrower
+        # telemetry/alarms/tickets restriction is enforced per-call by those tools'
+        # own can_access_technical_data checks (telemetry_tools._authorized_machine
+        # and service_tools' equivalent), which run regardless of this gate.
         intent = state["intent"]
         if intent not in ("commercial", "technical"):
             return {}
@@ -97,7 +106,7 @@ def build_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):
 
         if intent == "commercial" and not can_access_commercial_data(user_context):
             return {"intent": "access_denied"}
-        if intent == "technical" and not can_access_technical_data(user_context):
+        if intent == "technical" and not can_access_machine_identity(user_context):
             return {"intent": "access_denied"}
 
         return {}

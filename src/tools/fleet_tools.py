@@ -17,7 +17,7 @@ from src.context import AgentContext
 from src.db.db import get_db
 from src.security.access import (
     ACCESS_DENIED_OR_UNAVAILABLE,
-    can_access_technical_data,
+    can_access_machine_identity,
     get_user_context,
 )
 
@@ -25,8 +25,11 @@ logger = logging.getLogger(__name__)
 
 
 def _authorized_company_id(runtime: ToolRuntime[AgentContext]) -> str | None:
+    """Machines/MachineModels are machine identity data -- per spec, visible to
+    every visibility tier scoped to the user's own company, not just technical
+    users."""
     user_context = get_user_context(runtime.context.user_id)
-    if user_context is None or not can_access_technical_data(user_context):
+    if user_context is None or not can_access_machine_identity(user_context):
         return None
     return user_context["companyid"]
 
