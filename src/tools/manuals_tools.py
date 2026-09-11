@@ -17,12 +17,19 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from langchain.tools import ToolRuntime
 from langchain_core.tools import tool
 from pgvector.psycopg2 import register_vector
 from pypdf import PdfReader
 from sentence_transformers import CrossEncoder, SentenceTransformer
 
+from src.context import AgentContext
 from src.db.db import get_db
+from src.security.access import (
+    ACCESS_DENIED_OR_UNAVAILABLE,
+    can_access_technical_data,
+    get_user_context,
+)
 from src.tools.fleet_directory import machine_lookup
 
 logger = logging.getLogger(__name__)
@@ -161,21 +168,25 @@ def _is_valid_excerpt(content: str) -> bool:
     return bool(content) and len(content.strip()) >= _MIN_VALID_CHARS
 
 
-@tool
-def get_manual_excerpts(query: str, machine_id: str) -> str:
-    """Retrieve the manual excerpts most relevant to a query, for a specific machine."""
-    # TODO: no visibility-tier check here -- only company_id tenant scoping (implicit,
-    # since company_id is derived from machine_id below, not attacker/LLM-controlled).
-    # A commercial-only user should still be denied manuals of a company they don't
-    # belong to; visibility tiers (technician/full) aren't enforced at all yet.
-    if not query.strip():
-        return "No query was provided. Please ask a specific question about the manual."
-
+def authorized_company_for_machine(user_id: str, machine_id: str) -> str | None:
+    """Real user + visibility tier + machine-to-company ownership, all checked against
+    the DB (mirrors telemetry_tools._authorized_machine) -- returns the verified
+    company_id on success, None if the user doesn't exist, lacks technical visibility,
+    or the machine belongs to a different company than the user's own."""
+    user_context = get_user_context(user_id)
+    if user_context is None or not can_access_technical_data(user_context):
+        return None
     machine = machine_lookup(machine_id)
-    if machine is None:
-        return f"No manual is registered for machine_id {machine_id}."
-    company_id = machine["company_id"]
+    if machine is None or machine["company_id"] != user_context["companyid"]:
+        return None
+    return user_context["companyid"]
 
+
+def get_manual_excerpts_for_company(query: str, company_id: str, machine_id: str) -> str:
+    """Tenant-scoped retrieval, callable directly by a trusted caller that has already
+    resolved and verified company_id (see authorized_company_for_machine) -- used by
+    both the @tool wrapper below and manuals_agent, which calls this directly since it
+    has no LLM tool-calling loop to trigger ToolRuntime injection on get_manual_excerpts."""
     conn = _get_connection()
     try:
         if not _is_indexed(conn, company_id, machine_id):
@@ -239,6 +250,19 @@ def get_manual_excerpts(query: str, machine_id: str) -> str:
 
     excerpts = [f"- {source} (page {page}): {content}" for source, page, content in valid]
     return "\n".join(excerpts)
+
+
+@tool
+def get_manual_excerpts(query: str, machine_id: str, runtime: ToolRuntime[AgentContext]) -> str:
+    """Retrieve the manual excerpts most relevant to a query, for a specific machine."""
+    if not query.strip():
+        return "No query was provided. Please ask a specific question about the manual."
+
+    company_id = authorized_company_for_machine(runtime.context.user_id, machine_id)
+    if company_id is None:
+        return ACCESS_DENIED_OR_UNAVAILABLE
+
+    return get_manual_excerpts_for_company(query, company_id, machine_id)
 
 
 def show_last_retrieval() -> str:
