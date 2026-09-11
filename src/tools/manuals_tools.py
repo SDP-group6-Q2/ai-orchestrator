@@ -27,7 +27,7 @@ from src.context import AgentContext
 from src.db.db import get_db
 from src.security.access import (
     ACCESS_DENIED_OR_UNAVAILABLE,
-    can_access_technical_data,
+    can_access_machine_identity,
     get_user_context,
 )
 from src.tools.fleet_directory import machine_lookup
@@ -169,12 +169,18 @@ def _is_valid_excerpt(content: str) -> bool:
 
 
 def authorized_company_for_machine(user_id: str, machine_id: str) -> str | None:
-    """Real user + visibility tier + machine-to-company ownership, all checked against
-    the DB (mirrors telemetry_tools._authorized_machine) -- returns the verified
-    company_id on success, None if the user doesn't exist, lacks technical visibility,
-    or the machine belongs to a different company than the user's own."""
+    """Real user + machine-to-company ownership, all checked against the DB (mirrors
+    telemetry_tools._authorized_machine) -- returns the verified company_id on success,
+    None if the user doesn't exist or the machine belongs to a different company than
+    the user's own.
+
+    Manuals are machine identity/documentation, not operational data: per the spec's
+    access table this domain is visible to every visibility tier (full, technician,
+    commercial), so this checks can_access_machine_identity, not
+    can_access_technical_data -- unlike telemetry_tools._authorized_machine, which
+    guards the narrower operational-data domain."""
     user_context = get_user_context(user_id)
-    if user_context is None or not can_access_technical_data(user_context):
+    if user_context is None or not can_access_machine_identity(user_context):
         return None
     machine = machine_lookup(machine_id)
     if machine is None or machine["company_id"] != user_context["companyid"]:
