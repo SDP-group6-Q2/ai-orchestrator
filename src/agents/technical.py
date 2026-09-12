@@ -7,27 +7,21 @@ from langchain.chat_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from src.agents.manuals import make_manuals_tool
-from src.agents.diagnostics import make_diagnostics_tool
 from src.config import REFERENCE_DATE
 from src.context import AgentContext
-
-from src.tools import (get_company_maintenance_tickets, get_company_machines, get_machine_details)
+from src.skills import compose, diagnostics_skill, fleet_skill, maintenance_skill
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = (
+_BASE_PROMPT = (
 	f"Today's date is {REFERENCE_DATE}. Use it for any relative date reasoning "
 	"(e.g. how overdue a maintenance ticket is, or how recent an alarm is).\n\n"
 
 	"You are a technical expert on AROL company machinery. The company produces automatic machines and lines for the production of capping/closure of bottles, jars, and other containers."
-	"Your goal is to understand a costumer request and provide a grounded answer, using available expert tools: diagnostics and manuals."
+	"Your goal is to understand a costumer request and provide a grounded answer, using available expert tools."
 	"You also have access to open maintenance tickets for the machine, and you can query them to provide a more complete answer."
 
-	"Use get_company_machines to list every machine belonging to the current user's company, including model details. "
-	"Use get_machine_details for a specific machine's details (including its model) by machine_id. "
-    "Use the diagnostics_agent to ask questions about the machine's live sensor readings, error states, or operational health. "
 	"Use the manuals_agent to ask technical questions about the machine's operation, maintenance, or troubleshooting."
-	"Use get_company_maintenance_tickets to fetch the user's company's open and past support tickets. "
 
 	"Answer only once you have grounded evidence from the tool, using, when possible, both diagnostics data and manuals retrieved information. "
 	"Keep the answer concise and practical.\n\n"
@@ -38,19 +32,17 @@ _SYSTEM_PROMPT = (
 	"entered incorrectly or does not exist.\n"
 )
 
+_SKILLS = [fleet_skill, diagnostics_skill, maintenance_skill]
+
+
 def make_technical_agent(llm: BaseChatModel, checkpointer: BaseCheckpointSaver | None = None):
-	tools = [
-        make_manuals_tool(llm),
-        make_diagnostics_tool(llm),
-		get_company_maintenance_tickets,
-		get_company_machines,
-		get_machine_details,
-    ]
+	system_prompt, skill_tools = compose(_BASE_PROMPT, _SKILLS)
+	tools = [*skill_tools, make_manuals_tool(llm)]
 
 	agent = create_agent(
 		model=llm,
 		tools=tools,
-		system_prompt=_SYSTEM_PROMPT,
+		system_prompt=system_prompt,
 		checkpointer=checkpointer,
 		context_schema=AgentContext,
 	)

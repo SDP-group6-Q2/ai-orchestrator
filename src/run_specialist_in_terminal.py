@@ -9,9 +9,6 @@ Usage (from the project root):
     python -m src.run_specialist_in_terminal iot \
         --machine-id MCH-0004
 
-    python -m src.run_specialist_in_terminal diagnostics \
-        --machine-id MCH-0004
-
     python -m src.run_specialist_in_terminal orders \
         --user-id USR-011
 
@@ -33,7 +30,6 @@ from langchain_ollama import ChatOllama
 
 from src.agents import (
     make_commercial_agent,
-    make_diagnostics_tool,
     make_iot_tool,
     make_manuals_tool,
     make_orders_tool,
@@ -65,10 +61,6 @@ _TOOLS = {
     "orders": {
         "factory": make_orders_tool,
         "args": ["user_id"],
-    },
-    "diagnostics": {
-        "factory": make_diagnostics_tool,
-        "args": ["machine_id"],
     },
 }
 
