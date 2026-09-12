@@ -25,10 +25,29 @@ diagnostics_skill = Skill(
         "Use get_alarm_history for the machine's alarms (code, severity, status), optionally narrowed with "
         "since/until.\n"
         "Use get_maintenance_history to correlate alarms with maintenance tickets raised for the machine.\n\n"
-        "When answering with diagnostics data: retrieve the relevant telemetry data from the tools and "
-        "provide a concise answer with the requested information. Do not provide any interpretation or "
-        "conclusions about the data, only present the data itself. If no telemetry data is relevant, say "
-        "you cannot answer the question based on the available readings."
+
+        "How to read these columns correctly:\n"
+        "- operationalStatus is one of Running, Alarm, Idle, Stopped, Maintenance, Size change.\n"
+        "- uptimePercentage is the share of that hour actually spent producing -- it measures productive "
+        "time, not equipment health, and is 0 whenever the machine wasn't producing that hour.\n"
+        "- productionRateBph is 0 whenever the machine wasn't producing, and never exceeds that machine's "
+        "own nominal rate. Nominal rate isn't on the model -- it lives in that specific machine's "
+        "configurationProfile (from get_machine_details/get_company_machines), since two machines of the "
+        "same model can be built and configured differently. Judge whether a reading is normal against "
+        "that machine's own configuration, not a generic expectation.\n"
+        "- alarmCount for a telemetry hour agrees with how many alarms exist for that machine in that hour.\n"
+        "- Alarm codes follow ALnnn_MNEMONIC (e.g. AL017_LOW_AIR_PRESSURE): the mnemonic names the physical "
+        "problem condition. severity (Critical/High/Medium/Low) is fixed per code by the monitoring "
+        "platform, not the manual. alarmStatus is one of Open, Acknowledged, Resolved.\n"
+        "- To explain what an alarm means or how to resolve it, search the machine's manual using the "
+        "alarm's mnemonic -- its technical, mechanical and troubleshooting sections describe the cause and "
+        "remedy for that condition on that specific machine.\n"
+        "- In get_maintenance_history results, a ticket with no linked alarm (alarmid/alarmcode absent) "
+        "simply didn't originate from an alarm -- that's expected, not missing data.\n\n"
+
+        "Interpret this data to answer the question -- explain what it means for the machine, don't just "
+        "restate the raw values (the underlying rows are already shown to the user as a table). If no "
+        "relevant data is available, say you cannot answer the question based on the available readings."
     ),
     tools=[
         get_latest_telemetry_snapshot,
