@@ -1,8 +1,6 @@
 """FleetAssistant tools."""
 
 from src.tools.orders_tools import (
-    get_orders_descriptors,
-    query_orders,
     get_order_details,
     get_order_lines,
     get_orders_by_quote,
@@ -10,8 +8,6 @@ from src.tools.orders_tools import (
 )
 
 from src.tools.quotes_tools import (
-    get_quotes_descriptors,
-    query_quotes,
     get_quote_details,
     get_quote_revisions,
     get_quote_lines,
@@ -40,24 +36,14 @@ from src.tools.fleet_tools import (
 )
 
 __all__ = [
-    # Orders - legacy / generic
-    "get_orders_descriptors",
-    "query_orders",
-    "get_orders_info",
-    "list_contracts",
-
-    # Quotes - legacy / generic
-    "get_quotes_descriptors",
-    "query_quotes",
-
-    # Commercial - structured quote tools
+    # Commercial - quotes
     "get_quote_details",
     "get_quote_revisions",
     "get_quote_lines",
     "get_company_quotes",
     "get_latest_quote_revision",
 
-    # Commercial - structured order tools
+    # Commercial - orders
     "get_order_details",
     "get_order_lines",
     "get_orders_by_quote",
