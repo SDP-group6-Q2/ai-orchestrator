@@ -163,7 +163,7 @@ def _is_valid_excerpt(content: str) -> bool:
 
 @tool
 def get_manual_excerpts(query: str, machine_id: str) -> str:
-    """Retrieve the manual excerpts most relevant to a query, for a specific machine."""
+    """Semantic (RAG) search over a machine's manual documents; retrieves the excerpts most relevant to a query."""
     # TODO: no visibility-tier check here -- only company_id tenant scoping (implicit,
     # since company_id is derived from machine_id below, not attacker/LLM-controlled).
     # A commercial-only user should still be denied manuals of a company they don't

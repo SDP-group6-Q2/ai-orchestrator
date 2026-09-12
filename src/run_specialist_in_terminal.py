@@ -31,11 +31,11 @@ from langchain_ollama import ChatOllama
 from src.agents import (
     make_commercial_agent,
     make_iot_tool,
-    make_manuals_tool,
     make_orders_tool,
     make_service_tool,
     make_technical_agent,
 )
+from src.skills import manuals_agent
 
 from src.tools.manuals_tools import show_last_retrieval
 
@@ -47,7 +47,9 @@ logger = logging.getLogger(__name__)
 # "args" lists which extra kwargs they expect.
 _TOOLS = {
     "manuals": {
-        "factory": make_manuals_tool,
+        # manuals_agent is a plain static tool, not an llm-dependent factory;
+        # this adapter exists only to satisfy the uniform factory(llm) shape below.
+        "factory": lambda llm: manuals_agent,
         "args": ["machine_id"],
     },
     "iot": {

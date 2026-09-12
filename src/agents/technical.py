@@ -6,10 +6,9 @@ from langchain.agents import create_agent
 from langchain.chat_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
-from src.agents.manuals import make_manuals_tool
 from src.config import REFERENCE_DATE
 from src.context import AgentContext
-from src.skills import compose, diagnostics_skill, fleet_skill, maintenance_skill
+from src.skills import compose, diagnostics_skill, fleet_skill, maintenance_skill, manuals_skill
 
 logger = logging.getLogger(__name__)
 
@@ -21,8 +20,6 @@ _BASE_PROMPT = (
 	"Your goal is to understand a costumer request and provide a grounded answer, using available expert tools."
 	"You also have access to open maintenance tickets for the machine, and you can query them to provide a more complete answer."
 
-	"Use the manuals_agent to ask technical questions about the machine's operation, maintenance, or troubleshooting."
-
 	"Answer only once you have grounded evidence from the tool, using, when possible, both diagnostics data and manuals retrieved information. "
 	"Keep the answer concise and practical.\n\n"
 
@@ -32,12 +29,11 @@ _BASE_PROMPT = (
 	"entered incorrectly or does not exist.\n"
 )
 
-_SKILLS = [fleet_skill, diagnostics_skill, maintenance_skill]
+_SKILLS = [fleet_skill, diagnostics_skill, maintenance_skill, manuals_skill]
 
 
 def make_technical_agent(llm: BaseChatModel, checkpointer: BaseCheckpointSaver | None = None):
-	system_prompt, skill_tools = compose(_BASE_PROMPT, _SKILLS)
-	tools = [*skill_tools, make_manuals_tool(llm)]
+	system_prompt, tools = compose(_BASE_PROMPT, _SKILLS)
 
 	agent = create_agent(
 		model=llm,
