@@ -162,8 +162,12 @@ def _is_valid_excerpt(content: str) -> bool:
 
 
 @tool
-def get_manual_excerpts(query: str, machine_id: str) -> str:
-    """Semantic (RAG) search over a machine's manual documents; retrieves the excerpts most relevant to a query."""
+def get_manual_excerpts(query: str, machine_id: str) -> list[dict] | str:
+    """Semantic (RAG) search over a machine's manual documents; retrieves the excerpts most relevant to a query.
+
+    Returns a list of {source, page, content} dicts on success, or a plain
+    string message for the no-query/not-indexed/no-results edge cases.
+    """
     # TODO: no visibility-tier check here -- only company_id tenant scoping (implicit,
     # since company_id is derived from machine_id below, not attacker/LLM-controlled).
     # A commercial-only user should still be denied manuals of a company they don't
@@ -237,8 +241,7 @@ def get_manual_excerpts(query: str, machine_id: str) -> str:
         logger.warning("get_manual_excerpts: no valid excerpts for machine_id=%s query=%r", machine_id, query)
         return "No relevant manual excerpts were found for that query."
 
-    excerpts = [f"- {source} (page {page}): {content}" for source, page, content in valid]
-    return "\n".join(excerpts)
+    return [{"source": source, "page": page, "content": content} for source, page, content in valid]
 
 
 def show_last_retrieval() -> str:

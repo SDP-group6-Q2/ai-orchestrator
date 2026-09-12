@@ -8,7 +8,14 @@ from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from src.config import REFERENCE_DATE
 from src.context import AgentContext
-from src.skills import compose, diagnostics_skill, fleet_skill, maintenance_skill, manuals_skill
+from src.skills import (
+	compose,
+	diagnostics_skill,
+	fleet_skill,
+	maintenance_skill,
+	manuals_skill,
+	render_tool_tables_middleware,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +38,12 @@ _BASE_PROMPT = (
 
 _SKILLS = [fleet_skill, diagnostics_skill, maintenance_skill, manuals_skill]
 
+# Presentation order for rendered result tables (citations first, then data),
+# independent of _SKILLS' composition order and of whichever order the model
+# actually calls tools in. Deliberately excludes fleet_skill -- fleet-lookup
+# results never get a table.
+_TABLE_SKILLS = [manuals_skill, diagnostics_skill, maintenance_skill]
+
 
 def make_technical_agent(llm: BaseChatModel, checkpointer: BaseCheckpointSaver | None = None):
 	system_prompt, tools = compose(_BASE_PROMPT, _SKILLS)
@@ -41,6 +54,7 @@ def make_technical_agent(llm: BaseChatModel, checkpointer: BaseCheckpointSaver |
 		system_prompt=system_prompt,
 		checkpointer=checkpointer,
 		context_schema=AgentContext,
+		middleware=[render_tool_tables_middleware(_TABLE_SKILLS)],
 	)
 
 	return agent

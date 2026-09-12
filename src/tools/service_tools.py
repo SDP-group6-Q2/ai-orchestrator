@@ -19,6 +19,7 @@ from src.security.access import (
     can_access_technical_data,
     get_user_context,
 )
+from src.tools.serialization import json_safe_row
 
 logger = logging.getLogger(__name__)
 
@@ -56,4 +57,4 @@ def get_company_maintenance_tickets(runtime: ToolRuntime[AgentContext]) -> list[
     with get_db() as conn:
         with conn.cursor() as cursor:
             cursor.execute(query, (company_id,))
-            return [dict(row) for row in cursor.fetchall()]
+            return [json_safe_row(dict(row)) for row in cursor.fetchall()]

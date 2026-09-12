@@ -17,14 +17,17 @@ from __future__ import annotations
 
 import logging
 
+from langchain_core.messages import ToolMessage
 from langchain_core.tools import tool
 
 from src.skills.base import Skill
+from src.skills.formatting import render_table
 from src.tools import get_manual_excerpts
 
 logger = logging.getLogger(__name__)
 
 _HISTORY_WRAPPER_MARKER = "Now answer the user's new message: "
+_EXCERPT_PREVIEW_LENGTH = 200
 
 
 def _extract_query(request: str) -> str:
@@ -35,16 +38,37 @@ def _extract_query(request: str) -> str:
 	return request[marker_index + len(_HISTORY_WRAPPER_MARKER):].strip()
 
 
-@tool
-def manuals_agent(request: str, machine_id: str) -> str:
+@tool(response_format="content_and_artifact")
+def manuals_agent(request: str, machine_id: str) -> tuple[str, list[dict] | None]:
 	"""Ask the manuals specialist about documentation, procedures, or error-code meanings for a specific machine. Always pass the machine_id from the current conversation context."""
 	query = _extract_query(request)
 	logger.info("ManualsAgent invoked | query=%r machine_id=%r", query, machine_id)
 
-	response = get_manual_excerpts.invoke({"query": query, "machine_id": machine_id})
+	excerpts = get_manual_excerpts.invoke({"query": query, "machine_id": machine_id})
 
-	logger.info("ManualsAgent produced answer (%d chars)", len(response))
-	return response
+	if isinstance(excerpts, str):
+		logger.info("ManualsAgent produced answer (%d chars)", len(excerpts))
+		return excerpts, None
+
+	content = "\n".join(f"- {e['source']} (page {e['page']}): {e['content']}" for e in excerpts)
+	logger.info("ManualsAgent produced answer (%d chars)", len(content))
+	return content, excerpts
+
+
+def _render_manuals_citations(message: ToolMessage) -> str | None:
+	excerpts = message.artifact
+	if not excerpts:
+		return None
+
+	rows = [
+		{
+			"source": e["source"],
+			"page": e["page"],
+			"excerpt": e["content"][:_EXCERPT_PREVIEW_LENGTH],
+		}
+		for e in excerpts
+	]
+	return render_table(rows, columns=["source", "page", "excerpt"])
 
 
 manuals_skill = Skill(
@@ -58,4 +82,5 @@ manuals_skill = Skill(
 		"operation, maintenance, or troubleshooting."
 	),
 	tools=[manuals_agent],
+	tool_renderers={"manuals_agent": _render_manuals_citations},
 )

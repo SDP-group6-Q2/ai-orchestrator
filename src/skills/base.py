@@ -6,8 +6,10 @@ concatenated into one system prompt and one flat tool list at build time.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 
+from langchain_core.messages import ToolMessage
 from langchain_core.tools import BaseTool
 
 
@@ -17,6 +19,7 @@ class Skill:
     description: str
     instructions: str
     tools: list[BaseTool]
+    tool_renderers: dict[str, Callable[[ToolMessage], str | None]] = field(default_factory=dict)
 
 
 def compose(base_prompt: str, skills: list[Skill]) -> tuple[str, list[BaseTool]]:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from src.skills.base import Skill
+from src.skills.formatting import render_json_tool_result
 from src.tools import (
     get_latest_telemetry_snapshot,
     get_telemetry_history,
@@ -35,4 +36,10 @@ diagnostics_skill = Skill(
         get_alarm_history,
         get_maintenance_history,
     ],
+    tool_renderers={
+        "get_latest_telemetry_snapshot": render_json_tool_result,
+        "get_telemetry_history": render_json_tool_result,
+        "get_alarm_history": render_json_tool_result,
+        "get_maintenance_history": render_json_tool_result,
+    },
 )

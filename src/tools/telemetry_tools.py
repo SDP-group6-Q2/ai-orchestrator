@@ -21,6 +21,7 @@ from src.security.access import (
     get_user_context,
 )
 from src.tools.fleet_directory import machine_lookup
+from src.tools.serialization import json_safe_row
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,7 @@ def get_latest_telemetry_snapshot(machine_id: str, runtime: ToolRuntime[AgentCon
             if row is None:
                 return None
 
-            return dict(row)
+            return json_safe_row(dict(row))
 
 
 @tool
@@ -111,7 +112,7 @@ def get_telemetry_history(
     with get_db() as conn:
         with conn.cursor() as cursor:
             cursor.execute(query, params)
-            return [dict(row) for row in cursor.fetchall()]
+            return [json_safe_row(dict(row)) for row in cursor.fetchall()]
 
 
 @tool
@@ -151,7 +152,7 @@ def get_alarm_history(
     with get_db() as conn:
         with conn.cursor() as cursor:
             cursor.execute(query, params)
-            return [dict(row) for row in cursor.fetchall()]
+            return [json_safe_row(dict(row)) for row in cursor.fetchall()]
 
 
 @tool
@@ -185,4 +186,4 @@ def get_maintenance_history(machine_id: str, runtime: ToolRuntime[AgentContext])
     with get_db() as conn:
         with conn.cursor() as cursor:
             cursor.execute(query, (machine_id,))
-            return [dict(row) for row in cursor.fetchall()]
+            return [json_safe_row(dict(row)) for row in cursor.fetchall()]
