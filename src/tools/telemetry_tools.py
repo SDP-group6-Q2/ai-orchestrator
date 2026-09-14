@@ -61,6 +61,9 @@ def _time_range_conditions(since: str | None, until: str | None) -> tuple[list[s
 def get_latest_telemetry_snapshot(machine_id: str, runtime: ToolRuntime[AgentContext]) -> dict | str | None:
     """Return the most recent telemetry snapshot (operational status, production rate,
     uptime %, alarm count, temperature, energy usage, health note) for a machine."""
+    logger.info(
+        "get_latest_telemetry_snapshot called (machine_id=%s, user_id=%s)", machine_id, runtime.context.user_id
+    )
     if not _authorized_machine(runtime, machine_id):
         return ACCESS_DENIED_OR_UNAVAILABLE
 
@@ -106,6 +109,14 @@ def get_telemetry_summary(
     machine. Use this for trend/pattern questions instead of get_telemetry_history --
     a 30-day month is ~30 rows here versus 720 raw hourly rows there. Optionally
     restrict to a time range with `since`/`until`."""
+    logger.info(
+        "get_telemetry_summary called (machine_id=%s, user_id=%s, since=%s, until=%s, bucket=%s)",
+        machine_id,
+        runtime.context.user_id,
+        since,
+        until,
+        bucket,
+    )
     if not _authorized_machine(runtime, machine_id):
         return ACCESS_DENIED_OR_UNAVAILABLE
 
@@ -146,6 +157,13 @@ def get_telemetry_history(
     (timestamps as they appear in the data, e.g. from a previous tool result). Capped at
     the most recent readings -- use get_telemetry_summary instead for trend/pattern
     questions spanning more than a few days."""
+    logger.info(
+        "get_telemetry_history called (machine_id=%s, user_id=%s, since=%s, until=%s)",
+        machine_id,
+        runtime.context.user_id,
+        since,
+        until,
+    )
     if not _authorized_machine(runtime, machine_id):
         return ACCESS_DENIED_OR_UNAVAILABLE
 
@@ -191,6 +209,13 @@ def get_alarm_summary(
     count, first/last seen, how many are still open). Use this to answer "why does
     this machine keep alarming" instead of listing every individual alarm event with
     get_alarm_history. Optionally restrict to a time range with `since`/`until`."""
+    logger.info(
+        "get_alarm_summary called (machine_id=%s, user_id=%s, since=%s, until=%s)",
+        machine_id,
+        runtime.context.user_id,
+        since,
+        until,
+    )
     if not _authorized_machine(runtime, machine_id):
         return ACCESS_DENIED_OR_UNAVAILABLE
 
@@ -228,6 +253,13 @@ def get_alarm_history(
     severity and status. Optionally restrict to a time range with `since`/`until`.
     Capped at the most recent alarms -- use get_alarm_summary instead for "why does
     this keep happening" style questions."""
+    logger.info(
+        "get_alarm_history called (machine_id=%s, user_id=%s, since=%s, until=%s)",
+        machine_id,
+        runtime.context.user_id,
+        since,
+        until,
+    )
     if not _authorized_machine(runtime, machine_id):
         return ACCESS_DENIED_OR_UNAVAILABLE
 
@@ -267,6 +299,13 @@ def get_maintenance_history(
     alarm that triggered it (when there is one) -- for correlating alarms with
     maintenance history. Optionally restrict to a time range with `since`/`until`
     (matched against the ticket's createdDate). Capped at the most recent tickets."""
+    logger.info(
+        "get_maintenance_history called (machine_id=%s, user_id=%s, since=%s, until=%s)",
+        machine_id,
+        runtime.context.user_id,
+        since,
+        until,
+    )
     if not _authorized_machine(runtime, machine_id):
         return ACCESS_DENIED_OR_UNAVAILABLE
 

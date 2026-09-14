@@ -43,6 +43,12 @@ def get_company_maintenance_tickets(
     """Return maintenance tickets for machines belonging to the current user's company,
     newest first. Optionally restrict to a time range with `since`/`until` (matched
     against the ticket's createdDate). Capped at the most recent tickets."""
+    logger.info(
+        "get_company_maintenance_tickets called (user_id=%s, since=%s, until=%s)",
+        runtime.context.user_id,
+        since,
+        until,
+    )
     company_id = _authorized_company_id(runtime)
     if company_id is None:
         return ACCESS_DENIED_OR_UNAVAILABLE

@@ -264,6 +264,12 @@ def get_manual_excerpts(query: str, machine_id: str, runtime: ToolRuntime[AgentC
     Returns a list of {source, page, content} dicts on success, or a plain
     string message for the no-query/not-indexed/no-results/access-denied edge cases.
     """
+    logger.info(
+        "get_manual_excerpts called (query=%r, machine_id=%s, user_id=%s)",
+        query,
+        machine_id,
+        runtime.context.user_id,
+    )
     if not query.strip():
         return "No query was provided. Please ask a specific question about the manual."
 

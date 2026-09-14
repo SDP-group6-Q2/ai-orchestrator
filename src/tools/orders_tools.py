@@ -26,6 +26,7 @@ def _authorized_company_id(runtime: ToolRuntime[AgentContext]) -> str | None:
 @tool
 def get_order_details(order_id: str, runtime: ToolRuntime[AgentContext]) -> dict | str | None:
     """Return details of an order accessible to the current user."""
+    logger.info("get_order_details called (order_id=%s, user_id=%s)", order_id, runtime.context.user_id)
     company_id = _authorized_company_id(runtime)
     if company_id is None:
         return ACCESS_DENIED_OR_UNAVAILABLE
@@ -61,6 +62,7 @@ def get_order_details(order_id: str, runtime: ToolRuntime[AgentContext]) -> dict
 @tool
 def get_order_lines(order_id: str, runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
     """Return fulfillment lines for an order accessible to the current user."""
+    logger.info("get_order_lines called (order_id=%s, user_id=%s)", order_id, runtime.context.user_id)
     company_id = _authorized_company_id(runtime)
     if company_id is None:
         return ACCESS_DENIED_OR_UNAVAILABLE
@@ -86,6 +88,7 @@ def get_order_lines(order_id: str, runtime: ToolRuntime[AgentContext]) -> list[d
 @tool
 def get_orders_by_quote(quote_id: str, runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
     """Return orders created from a quote accessible to the current user."""
+    logger.info("get_orders_by_quote called (quote_id=%s, user_id=%s)", quote_id, runtime.context.user_id)
     company_id = _authorized_company_id(runtime)
     if company_id is None:
         return ACCESS_DENIED_OR_UNAVAILABLE
@@ -116,6 +119,7 @@ def get_orders_by_quote(quote_id: str, runtime: ToolRuntime[AgentContext]) -> li
 @tool
 def get_company_orders(runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
     """Return orders belonging to the current user's company."""
+    logger.info("get_company_orders called (user_id=%s)", runtime.context.user_id)
     company_id = _authorized_company_id(runtime)
     if company_id is None:
         return ACCESS_DENIED_OR_UNAVAILABLE

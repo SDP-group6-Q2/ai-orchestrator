@@ -26,6 +26,7 @@ def _authorized_company_id(runtime: ToolRuntime[AgentContext]) -> str | None:
 @tool
 def get_quote_details(quote_id: str, runtime: ToolRuntime[AgentContext]) -> dict | str | None:
     """Return details of a quote accessible to the current user."""
+    logger.info("get_quote_details called (quote_id=%s, user_id=%s)", quote_id, runtime.context.user_id)
     company_id = _authorized_company_id(runtime)
     if company_id is None:
         return ACCESS_DENIED_OR_UNAVAILABLE
@@ -58,6 +59,7 @@ def get_quote_details(quote_id: str, runtime: ToolRuntime[AgentContext]) -> dict
 @tool
 def get_quote_revisions(quote_id: str, runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
     """Return revisions of a quote accessible to the current user."""
+    logger.info("get_quote_revisions called (quote_id=%s, user_id=%s)", quote_id, runtime.context.user_id)
     company_id = _authorized_company_id(runtime)
     if company_id is None:
         return ACCESS_DENIED_OR_UNAVAILABLE
@@ -88,6 +90,9 @@ def get_quote_revisions(quote_id: str, runtime: ToolRuntime[AgentContext]) -> li
 @tool
 def get_quote_lines(quote_revision_id: str, runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
     """Return quote lines accessible to the current user."""
+    logger.info(
+        "get_quote_lines called (quote_revision_id=%s, user_id=%s)", quote_revision_id, runtime.context.user_id
+    )
     company_id = _authorized_company_id(runtime)
     if company_id is None:
         return ACCESS_DENIED_OR_UNAVAILABLE
@@ -117,6 +122,7 @@ def get_quote_lines(quote_revision_id: str, runtime: ToolRuntime[AgentContext]) 
 @tool
 def get_company_quotes(runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
     """Return quotes belonging to the current user's company."""
+    logger.info("get_company_quotes called (user_id=%s)", runtime.context.user_id)
     company_id = _authorized_company_id(runtime)
     if company_id is None:
         return ACCESS_DENIED_OR_UNAVAILABLE
@@ -143,6 +149,7 @@ def get_company_quotes(runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
 @tool
 def get_latest_quote_revision(quote_id: str, runtime: ToolRuntime[AgentContext]) -> dict | str | None:
     """Return the latest revision of a quote accessible to the current user."""
+    logger.info("get_latest_quote_revision called (quote_id=%s, user_id=%s)", quote_id, runtime.context.user_id)
     company_id = _authorized_company_id(runtime)
     if company_id is None:
         return ACCESS_DENIED_OR_UNAVAILABLE

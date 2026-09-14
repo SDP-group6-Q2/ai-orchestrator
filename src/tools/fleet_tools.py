@@ -57,6 +57,7 @@ _MACHINE_COLUMNS = """
 @tool
 def get_company_machines(runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
     """Return every machine belonging to the current user's company, including its model details."""
+    logger.info("get_company_machines called (user_id=%s)", runtime.context.user_id)
     company_id = _authorized_company_id(runtime)
     if company_id is None:
         return ACCESS_DENIED_OR_UNAVAILABLE
@@ -78,6 +79,7 @@ def get_company_machines(runtime: ToolRuntime[AgentContext]) -> list[dict] | str
 @tool
 def get_machine_details(machine_id: str, runtime: ToolRuntime[AgentContext]) -> dict | str | None:
     """Return details (including model) of a machine belonging to the current user's company."""
+    logger.info("get_machine_details called (machine_id=%s, user_id=%s)", machine_id, runtime.context.user_id)
     company_id = _authorized_company_id(runtime)
     if company_id is None:
         return ACCESS_DENIED_OR_UNAVAILABLE
