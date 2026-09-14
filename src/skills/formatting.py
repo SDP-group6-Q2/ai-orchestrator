@@ -50,7 +50,9 @@ def render_table(rows: list[dict], columns: list[str] | None = None) -> str:
 
 
 def render_json_tool_result(message: ToolMessage) -> str | None:
-	"""Generic renderer for tools whose ToolMessage.content is JSON (a dict or list of dicts)."""
+	"""Generic renderer for tools whose ToolMessage.content is JSON: a dict, a list of
+	dicts, or the {"rows": [...], "truncated": ..., "oldest_included_timestamp": ...}
+	capped-result wrapper from src.tools.pagination.cap_rows."""
 	try:
 		data = json.loads(message.content)
 	except (TypeError, ValueError):
@@ -59,11 +61,26 @@ def render_json_tool_result(message: ToolMessage) -> str | None:
 	if not data:
 		return None
 
-	rows = [data] if isinstance(data, dict) else data
-	if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+	caption = None
+	if isinstance(data, dict) and "rows" in data and isinstance(data["rows"], list):
+		rows = data["rows"]
+		if data.get("truncated"):
+			boundary = data.get("oldest_included_timestamp")
+			caption = (
+				f"_(showing the {data.get('returned_count', len(rows))} most recent rows; "
+				f"more exist before {boundary} -- narrow since/until, or use a summary tool, "
+				"to see further back)_"
+			)
+	else:
+		rows = [data] if isinstance(data, dict) else data
+
+	if not rows or not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
 		return None
 
-	return render_table(rows)
+	table = render_table(rows)
+	if caption:
+		table += f"\n\n{caption}"
+	return table
 
 
 def render_tool_tables_middleware(skills: list[Skill]):

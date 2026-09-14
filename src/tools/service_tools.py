@@ -19,9 +19,12 @@ from src.security.access import (
     can_access_technical_data,
     get_user_context,
 )
+from src.tools.pagination import cap_rows
 from src.tools.serialization import json_safe_row
 
 logger = logging.getLogger(__name__)
+
+_MAX_ROWS = 100
 
 
 def _authorized_company_id(runtime: ToolRuntime[AgentContext]) -> str | None:
@@ -32,13 +35,29 @@ def _authorized_company_id(runtime: ToolRuntime[AgentContext]) -> str | None:
 
 
 @tool
-def get_company_maintenance_tickets(runtime: ToolRuntime[AgentContext]) -> list[dict] | str:
-    """Return every maintenance ticket for machines belonging to the current user's company, newest first."""
+def get_company_maintenance_tickets(
+    runtime: ToolRuntime[AgentContext],
+    since: str | None = None,
+    until: str | None = None,
+) -> dict | str:
+    """Return maintenance tickets for machines belonging to the current user's company,
+    newest first. Optionally restrict to a time range with `since`/`until` (matched
+    against the ticket's createdDate). Capped at the most recent tickets."""
     company_id = _authorized_company_id(runtime)
     if company_id is None:
         return ACCESS_DENIED_OR_UNAVAILABLE
 
-    query = """
+    conditions: list[str] = []
+    params: list[str] = []
+    if since is not None:
+        conditions.append("mt.createddate >= %s")
+        params.append(since)
+    if until is not None:
+        conditions.append("mt.createddate <= %s")
+        params.append(until)
+    where_clause = " AND ".join(["m.companyid = %s", *conditions])
+
+    query = f"""
         SELECT
             mt.ticketid,
             mt.machineid,
@@ -50,11 +69,14 @@ def get_company_maintenance_tickets(runtime: ToolRuntime[AgentContext]) -> list[
             mt.ownerrole
         FROM maintenancetickets mt
         JOIN machines m ON m.machineid = mt.machineid
-        WHERE m.companyid = %s
-        ORDER BY mt.createddate DESC;
+        WHERE {where_clause}
+        ORDER BY mt.createddate DESC
+        LIMIT %s;
     """
 
     with get_db() as conn:
         with conn.cursor() as cursor:
-            cursor.execute(query, (company_id,))
-            return [json_safe_row(dict(row)) for row in cursor.fetchall()]
+            cursor.execute(query, [company_id, *params, _MAX_ROWS + 1])
+            rows = [json_safe_row(dict(row)) for row in cursor.fetchall()]
+
+    return cap_rows(rows, _MAX_ROWS, "createddate")

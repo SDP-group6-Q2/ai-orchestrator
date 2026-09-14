@@ -21,7 +21,9 @@ from src.tools.service_tools import (
 
 from src.tools.telemetry_tools import (
     get_latest_telemetry_snapshot,
+    get_telemetry_summary,
     get_telemetry_history,
+    get_alarm_summary,
     get_alarm_history,
     get_maintenance_history,
 )
@@ -54,7 +56,9 @@ __all__ = [
 
     # Telemetry
     "get_latest_telemetry_snapshot",
+    "get_telemetry_summary",
     "get_telemetry_history",
+    "get_alarm_summary",
     "get_alarm_history",
     "get_maintenance_history",
 
