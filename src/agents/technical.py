@@ -29,7 +29,7 @@ _BASE_PROMPT = (
 	"available tools are relevant to it.\n\n"
 
 	"The first system message in this conversation names the machine already in scope, for example: "
-	"'Current user_id: USR-001. Current machine_id: MCH-0001.' Whatever value follows 'Current machine_id:' "
+	"'Current machine_id: MCH-0001.' Whatever value follows 'Current machine_id:' "
 	"in that message -- copy those exact characters, nothing else -- is the machine_id to pass to any tool "
 	"call that needs one. Do not call get_company_machines to check what machines the company owns, and "
 	"never ask the user to confirm or restate it. Seeing multiple machines listed anywhere is not a reason "
