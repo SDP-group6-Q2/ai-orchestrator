@@ -1,8 +1,6 @@
 """FleetAssistant tools."""
 
 from src.tools.orders_tools import (
-    get_orders_descriptors,
-    query_orders,
     get_order_details,
     get_order_lines,
     get_orders_by_quote,
@@ -10,8 +8,6 @@ from src.tools.orders_tools import (
 )
 
 from src.tools.quotes_tools import (
-    get_quotes_descriptors,
-    query_quotes,
     get_quote_details,
     get_quote_revisions,
     get_quote_lines,
@@ -20,14 +16,16 @@ from src.tools.quotes_tools import (
 )
 
 from src.tools.service_tools import (
-    open_new_ticket,
-    query_service_tickets,
-    get_service_tables_descriptors,
+    get_company_maintenance_tickets,
 )
 
 from src.tools.telemetry_tools import (
-    query_telemetry_readings,
-    get_telemetry_tables_descriptors,
+    get_latest_telemetry_snapshot,
+    get_telemetry_summary,
+    get_telemetry_history,
+    get_alarm_summary,
+    get_alarm_history,
+    get_maintenance_history,
 )
 
 from src.tools.manuals_tools import (
@@ -35,46 +33,38 @@ from src.tools.manuals_tools import (
 )
 
 from src.tools.fleet_tools import (
-    query_fleet,
-    get_fleet_descriptors,
+    get_company_machines,
+    get_machine_details,
 )
 
 __all__ = [
-    # Orders - legacy / generic
-    "get_orders_descriptors",
-    "query_orders",
-    "get_orders_info",
-    "list_contracts",
-
-    # Quotes - legacy / generic
-    "get_quotes_descriptors",
-    "query_quotes",
-
-    # Commercial - structured quote tools
+    # Commercial - quotes
     "get_quote_details",
     "get_quote_revisions",
     "get_quote_lines",
     "get_company_quotes",
     "get_latest_quote_revision",
 
-    # Commercial - structured order tools
+    # Commercial - orders
     "get_order_details",
     "get_order_lines",
     "get_orders_by_quote",
     "get_company_orders",
 
     # Service
-    "get_service_tables_descriptors",
-    "query_service_tickets",
-    "open_new_ticket",
+    "get_company_maintenance_tickets",
 
     # Telemetry
-    "query_telemetry_readings",
-    "get_telemetry_tables_descriptors",
+    "get_latest_telemetry_snapshot",
+    "get_telemetry_summary",
+    "get_telemetry_history",
+    "get_alarm_summary",
+    "get_alarm_history",
+    "get_maintenance_history",
 
     # Fleet
-    "get_fleet_descriptors",
-    "query_fleet",
+    "get_company_machines",
+    "get_machine_details",
 
     # Manuals
     "get_manual_excerpts",

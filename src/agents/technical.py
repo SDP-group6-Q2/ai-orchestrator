@@ -6,47 +6,68 @@ from langchain.agents import create_agent
 from langchain.chat_models import BaseChatModel
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
-from src.agents.manuals import make_manuals_tool
-from src.agents.diagnostics import make_diagnostics_tool
-
-from src.tools import (query_service_tickets, get_service_tables_descriptors, get_fleet_descriptors, query_fleet)
+from src.config import REFERENCE_DATE
+from src.context import AgentContext
+from src.skills import (
+	compose,
+	diagnostics_skill,
+	fleet_skill,
+	maintenance_skill,
+	manuals_skill,
+	render_tool_tables_middleware,
+)
 
 logger = logging.getLogger(__name__)
 
-_SYSTEM_PROMPT = (
-	"You are a technical expert on AROL company machinery. The company produces automatic machines and lines for the production of capping/closure of bottles, jars, and other containers."
-	"Your goal is to understand a costumer request and provide a grounded answer, using available expert tools: diagnostics and manuals."
-	"You also have access to open maintenance tickets for the machine, and you can query them to provide a more complete answer."
+_BASE_PROMPT = (
+	f"Today's date is {REFERENCE_DATE}. Use it for any relative date reasoning "
+	"(e.g. how overdue a maintenance ticket is, or how recent an alarm is).\n\n"
 
-	"Use the get_fleet_descriptors tool to understand the structure of the fleet data before querying it."
-	"Use query_fleet with an SQL query to fetch information about the fleet of machines, inlcuding models, locations, and other details."
-    "Use the diagnostics_agent to ask questions about the machine's live sensor readings, error states, cycle counts, or operational health. "
-	"Use the manuals_agent to ask technical questions about the machine's operation, maintenance, or troubleshooting."
-	"Use the get_service_tables_descriptors tool to understand the structure of the service tickets data before querying it."
-	"Use query_service_tickets to fetch the user's open and past support tickets. "
+	"You are a technical expert on AROL company machinery. The company produces automatic machines and lines "
+	"for the production of capping/closure of bottles, jars, and other containers. "
+	"Your goal is to understand a customer's request and provide a grounded answer, using whichever of your "
+	"available tools are relevant to it.\n\n"
 
-	"The user_id and machine_id for the current conversation are given to you in a system message at the start of the thread. "
-	"Always use that machine_id for tool calls unless the user explicitly names a different machine; never ask the user for information already provided this way. "
+	"The first system message in this conversation names the machine already in scope, for example: "
+	"'Current machine_id: MCH-0001.' Whatever value follows 'Current machine_id:' "
+	"in that message -- copy those exact characters, nothing else -- is the machine_id to pass to any tool "
+	"call that needs one. Do not call get_company_machines to check what machines the company owns, and "
+	"never ask the user to confirm or restate it. Seeing multiple machines listed anywhere is not a reason "
+	"to ask which one they mean; the machine_id already stated at the start of this conversation answers "
+	"that. If a tool call is denied or returns nothing, say so plainly and stop -- never write a generic "
+	"answer instead, and never invent details (a model name, a spec, a procedure) that didn't come from a "
+	"tool result.\n\n"
 
-	"Answer only once you have grounded evidence from the tool, using, when possible, both diagnostics data and manuals retrieved information. "
-	"Keep the answer concise and practical."
+	"Manual citations and retrieved data are automatically rendered as tables above your answer whenever a "
+	"relevant tool call produces one -- do not re-list raw rows or citations yourself. Write a concise, "
+	"practical answer that interprets what those tables show and directly addresses the request, grounded "
+	"only in evidence from the tools you actually called.\n\n"
+
+	"- If a tool returns ACCESS_DENIED_OR_UNAVAILABLE, tell the user that "
+	"they cannot access technical information for the requested resource.\n"
+	"- Never speculate that inaccessible technical data was cancelled, deleted, "
+	"entered incorrectly or does not exist.\n"
 )
 
+_SKILLS = [fleet_skill, diagnostics_skill, maintenance_skill, manuals_skill]
+
+# Presentation order for rendered result tables (citations first, then data),
+# independent of _SKILLS' composition order and of whichever order the model
+# actually calls tools in. Deliberately excludes fleet_skill -- fleet-lookup
+# results never get a table.
+_TABLE_SKILLS = [manuals_skill, diagnostics_skill, maintenance_skill]
+
+
 def make_technical_agent(llm: BaseChatModel, checkpointer: BaseCheckpointSaver | None = None):
-	tools = [
-        make_manuals_tool(llm),
-        make_diagnostics_tool(llm),
-		get_service_tables_descriptors,
-		query_service_tickets,
-		get_fleet_descriptors,
-		query_fleet,
-    ]
-	
+	system_prompt, tools = compose(_BASE_PROMPT, _SKILLS)
+
 	agent = create_agent(
 		model=llm,
 		tools=tools,
-		system_prompt=_SYSTEM_PROMPT,
+		system_prompt=system_prompt,
 		checkpointer=checkpointer,
+		context_schema=AgentContext,
+		middleware=[render_tool_tables_middleware(_TABLE_SKILLS)],
 	)
 
 	return agent
