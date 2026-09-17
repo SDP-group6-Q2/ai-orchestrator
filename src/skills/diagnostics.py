@@ -20,6 +20,9 @@ diagnostics_skill = Skill(
         "for a specific machine."
     ),
     instructions=(
+        "All of these tools default machine_id to the machine already in context -- only pass machine_id "
+        "explicitly to ask about a different machine than the current one.\n\n"
+
         "Use get_latest_telemetry_snapshot for the machine's current operational status, production rate, "
         "uptime, alarm count, temperature, energy usage and health note.\n"
         "Use get_telemetry_summary for trend/pattern questions or performance-degradation analysis spanning "

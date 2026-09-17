@@ -20,6 +20,7 @@ from src.security.access import (
     can_access_machine_identity,
     get_user_context,
 )
+from src.tools.fleet_directory import resolve_machine_id
 
 logger = logging.getLogger(__name__)
 
@@ -77,9 +78,17 @@ def get_company_machines(runtime: ToolRuntime[AgentContext]) -> list[dict] | str
 
 
 @tool
-def get_machine_details(machine_id: str, runtime: ToolRuntime[AgentContext]) -> dict | str | None:
-    """Return details (including model) of a machine belonging to the current user's company."""
+def get_machine_details(
+    runtime: ToolRuntime[AgentContext],
+    machine_id: str | None = None,
+) -> dict | str | None:
+    """Return details (including model) of a machine belonging to the current user's company.
+    machine_id is optional -- defaults to the machine currently in context; only pass it to
+    ask about a different machine."""
+    machine_id = resolve_machine_id(machine_id, runtime)
     logger.info("get_machine_details called (machine_id=%s, user_id=%s)", machine_id, runtime.context.user_id)
+    if machine_id is None:
+        return "No machine specified, and none is set in the current context. Please specify a machine_id."
     company_id = _authorized_company_id(runtime)
     if company_id is None:
         return ACCESS_DENIED_OR_UNAVAILABLE

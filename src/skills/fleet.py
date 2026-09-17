@@ -11,7 +11,9 @@ fleet_skill = Skill(
     instructions=(
         "Use get_company_machines to list every machine belonging to the current user's company, "
         "including model details.\n"
-        "Use get_machine_details for a specific machine's details (including its model) by machine_id."
+        "Use get_machine_details for a specific machine's details (including its model). machine_id is "
+        "optional -- defaults to the machine currently in context; only pass it to ask about a different "
+        "machine."
     ),
     tools=[get_company_machines, get_machine_details],
 )

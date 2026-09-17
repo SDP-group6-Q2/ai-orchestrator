@@ -6,6 +6,11 @@ machine_id and verifies, via `machine_lookup`, that the machine belongs to the
 requesting user's company before querying -- tenant scoping that a freeform SQL
 tool could never safely enforce, since the LLM controls the whole query shape.
 
+machine_id is optional on every tool here, defaulting to runtime.context.machine_id
+via resolve_machine_id -- the model only needs to supply it to ask about a machine
+other than the one already scoped to the current conversation, instead of having to
+correctly retype the current machine_id on every call.
+
 get_telemetry_history/get_alarm_history/get_maintenance_history are capped
 (see src/tools/pagination.cap_rows) -- an unbounded get_telemetry_history for
 one machine's 30-day history measured at ~73K tokens in a single tool call,
@@ -28,13 +33,14 @@ from src.security.access import (
     can_access_technical_data,
     get_user_context,
 )
-from src.tools.fleet_directory import machine_lookup
+from src.tools.fleet_directory import machine_lookup, resolve_machine_id
 from src.tools.pagination import cap_rows
 from src.tools.serialization import json_safe_row
 
 logger = logging.getLogger(__name__)
 
 _MAX_ROWS = 100
+_NO_MACHINE_MESSAGE = "No machine specified, and none is set in the current context. Please specify a machine_id."
 
 
 def _authorized_machine(runtime: ToolRuntime[AgentContext], machine_id: str) -> bool:
@@ -58,12 +64,20 @@ def _time_range_conditions(since: str | None, until: str | None) -> tuple[list[s
 
 
 @tool
-def get_latest_telemetry_snapshot(machine_id: str, runtime: ToolRuntime[AgentContext]) -> dict | str | None:
+def get_latest_telemetry_snapshot(
+    runtime: ToolRuntime[AgentContext],
+    machine_id: str | None = None,
+) -> dict | str | None:
     """Return the most recent telemetry snapshot (operational status, production rate,
-    uptime %, alarm count, temperature, energy usage, health note) for a machine."""
+    uptime %, alarm count, temperature, energy usage, health note) for a machine.
+    machine_id is optional -- defaults to the machine currently in context; only pass
+    it to ask about a different machine."""
+    machine_id = resolve_machine_id(machine_id, runtime)
     logger.info(
         "get_latest_telemetry_snapshot called (machine_id=%s, user_id=%s)", machine_id, runtime.context.user_id
     )
+    if machine_id is None:
+        return _NO_MACHINE_MESSAGE
     if not _authorized_machine(runtime, machine_id):
         return ACCESS_DENIED_OR_UNAVAILABLE
 
@@ -98,8 +112,8 @@ def get_latest_telemetry_snapshot(machine_id: str, runtime: ToolRuntime[AgentCon
 
 @tool
 def get_telemetry_summary(
-    machine_id: str,
     runtime: ToolRuntime[AgentContext],
+    machine_id: str | None = None,
     since: str | None = None,
     until: str | None = None,
     bucket: Literal["day", "week"] = "day",
@@ -108,7 +122,9 @@ def get_telemetry_summary(
     total alarm count, min/max temperature, avg energy usage, snapshot count) for a
     machine. Use this for trend/pattern questions instead of get_telemetry_history --
     a 30-day month is ~30 rows here versus 720 raw hourly rows there. Optionally
-    restrict to a time range with `since`/`until`."""
+    restrict to a time range with `since`/`until`. machine_id is optional -- defaults
+    to the machine currently in context; only pass it to ask about a different machine."""
+    machine_id = resolve_machine_id(machine_id, runtime)
     logger.info(
         "get_telemetry_summary called (machine_id=%s, user_id=%s, since=%s, until=%s, bucket=%s)",
         machine_id,
@@ -117,6 +133,8 @@ def get_telemetry_summary(
         until,
         bucket,
     )
+    if machine_id is None:
+        return _NO_MACHINE_MESSAGE
     if not _authorized_machine(runtime, machine_id):
         return ACCESS_DENIED_OR_UNAVAILABLE
 
@@ -147,8 +165,8 @@ def get_telemetry_summary(
 
 @tool
 def get_telemetry_history(
-    machine_id: str,
     runtime: ToolRuntime[AgentContext],
+    machine_id: str | None = None,
     since: str | None = None,
     until: str | None = None,
 ) -> dict | str:
@@ -156,7 +174,9 @@ def get_telemetry_history(
     a specific window of readings. Optionally restrict to a time range with `since`/`until`
     (timestamps as they appear in the data, e.g. from a previous tool result). Capped at
     the most recent readings -- use get_telemetry_summary instead for trend/pattern
-    questions spanning more than a few days."""
+    questions spanning more than a few days. machine_id is optional -- defaults to the
+    machine currently in context; only pass it to ask about a different machine."""
+    machine_id = resolve_machine_id(machine_id, runtime)
     logger.info(
         "get_telemetry_history called (machine_id=%s, user_id=%s, since=%s, until=%s)",
         machine_id,
@@ -164,6 +184,8 @@ def get_telemetry_history(
         since,
         until,
     )
+    if machine_id is None:
+        return _NO_MACHINE_MESSAGE
     if not _authorized_machine(runtime, machine_id):
         return ACCESS_DENIED_OR_UNAVAILABLE
 
@@ -200,15 +222,18 @@ def get_telemetry_history(
 
 @tool
 def get_alarm_summary(
-    machine_id: str,
     runtime: ToolRuntime[AgentContext],
+    machine_id: str | None = None,
     since: str | None = None,
     until: str | None = None,
 ) -> list[dict] | str:
     """Return alarm counts grouped by code and severity for a machine (occurrence
     count, first/last seen, how many are still open). Use this to answer "why does
     this machine keep alarming" instead of listing every individual alarm event with
-    get_alarm_history. Optionally restrict to a time range with `since`/`until`."""
+    get_alarm_history. Optionally restrict to a time range with `since`/`until`.
+    machine_id is optional -- defaults to the machine currently in context; only pass
+    it to ask about a different machine."""
+    machine_id = resolve_machine_id(machine_id, runtime)
     logger.info(
         "get_alarm_summary called (machine_id=%s, user_id=%s, since=%s, until=%s)",
         machine_id,
@@ -216,6 +241,8 @@ def get_alarm_summary(
         since,
         until,
     )
+    if machine_id is None:
+        return _NO_MACHINE_MESSAGE
     if not _authorized_machine(runtime, machine_id):
         return ACCESS_DENIED_OR_UNAVAILABLE
 
@@ -244,15 +271,17 @@ def get_alarm_summary(
 
 @tool
 def get_alarm_history(
-    machine_id: str,
     runtime: ToolRuntime[AgentContext],
+    machine_id: str | None = None,
     since: str | None = None,
     until: str | None = None,
 ) -> dict | str:
     """Return alarms for a machine ordered newest to oldest, including alarm code,
     severity and status. Optionally restrict to a time range with `since`/`until`.
     Capped at the most recent alarms -- use get_alarm_summary instead for "why does
-    this keep happening" style questions."""
+    this keep happening" style questions. machine_id is optional -- defaults to the
+    machine currently in context; only pass it to ask about a different machine."""
+    machine_id = resolve_machine_id(machine_id, runtime)
     logger.info(
         "get_alarm_history called (machine_id=%s, user_id=%s, since=%s, until=%s)",
         machine_id,
@@ -260,6 +289,8 @@ def get_alarm_history(
         since,
         until,
     )
+    if machine_id is None:
+        return _NO_MACHINE_MESSAGE
     if not _authorized_machine(runtime, machine_id):
         return ACCESS_DENIED_OR_UNAVAILABLE
 
@@ -290,15 +321,18 @@ def get_alarm_history(
 
 @tool
 def get_maintenance_history(
-    machine_id: str,
     runtime: ToolRuntime[AgentContext],
+    machine_id: str | None = None,
     since: str | None = None,
     until: str | None = None,
 ) -> dict | str:
     """Return maintenance tickets for a machine, newest first, each joined with the
     alarm that triggered it (when there is one) -- for correlating alarms with
     maintenance history. Optionally restrict to a time range with `since`/`until`
-    (matched against the ticket's createdDate). Capped at the most recent tickets."""
+    (matched against the ticket's createdDate). Capped at the most recent tickets.
+    machine_id is optional -- defaults to the machine currently in context; only pass
+    it to ask about a different machine."""
+    machine_id = resolve_machine_id(machine_id, runtime)
     logger.info(
         "get_maintenance_history called (machine_id=%s, user_id=%s, since=%s, until=%s)",
         machine_id,
@@ -306,6 +340,8 @@ def get_maintenance_history(
         since,
         until,
     )
+    if machine_id is None:
+        return _NO_MACHINE_MESSAGE
     if not _authorized_machine(runtime, machine_id):
         return ACCESS_DENIED_OR_UNAVAILABLE
 

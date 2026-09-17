@@ -54,7 +54,8 @@ class FleetAssistant:
         context_message = SystemMessage(
             content=(
                 f"Current user_id: {user_id}. Current machine_id: {machine_id}. "
-                "Use this machine_id for tool calls unless the user names a different machine."
+                "Tools default to this machine automatically when machine_id is omitted -- only pass a "
+                "different machine_id if the user asks about another machine."
             )
         )
         prior_messages = _history_to_messages(history) if history else []

@@ -31,12 +31,14 @@ from src.context import AgentContext
 from src.security.access import ACCESS_DENIED_OR_UNAVAILABLE
 from src.skills.base import Skill
 from src.skills.formatting import render_table
+from src.tools.fleet_directory import resolve_machine_id
 from src.tools.manuals_tools import authorized_company_for_machine, get_manual_excerpts_for_company
 
 logger = logging.getLogger(__name__)
 
 _HISTORY_WRAPPER_MARKER = "Now answer the user's new message: "
 _EXCERPT_PREVIEW_LENGTH = 200
+_NO_MACHINE_MESSAGE = "No machine specified, and none is set in the current context. Please specify a machine_id."
 
 
 def _extract_query(request: str) -> str:
@@ -48,10 +50,20 @@ def _extract_query(request: str) -> str:
 
 
 @tool(response_format="content_and_artifact")
-def manuals_agent(request: str, machine_id: str, runtime: ToolRuntime[AgentContext]) -> tuple[str, list[dict] | None]:
-	"""Ask the manuals specialist about documentation, procedures, or error-code meanings for a specific machine. Always pass the machine_id from the current conversation context."""
+def manuals_agent(
+	request: str,
+	runtime: ToolRuntime[AgentContext],
+	machine_id: str | None = None,
+) -> tuple[str, list[dict] | None]:
+	"""Ask the manuals specialist about documentation, procedures, or error-code meanings for a specific
+	machine. machine_id is optional -- defaults to the machine currently in context; only pass it to ask
+	about a different machine."""
 	query = _extract_query(request)
+	machine_id = resolve_machine_id(machine_id, runtime)
 	logger.info("ManualsAgent invoked | query=%r machine_id=%r", query, machine_id)
+
+	if machine_id is None:
+		return _NO_MACHINE_MESSAGE, None
 
 	company_id = authorized_company_for_machine(runtime.context.user_id, machine_id)
 	if company_id is None:
@@ -93,7 +105,8 @@ manuals_skill = Skill(
 	),
 	instructions=(
 		"Use the manuals_agent to ask technical questions about the machine's "
-		"operation, maintenance, or troubleshooting."
+		"operation, maintenance, or troubleshooting. It defaults to the machine "
+		"already in context -- only pass machine_id to ask about a different machine."
 	),
 	tools=[manuals_agent],
 	tool_renderers={"manuals_agent": _render_manuals_citations},
