@@ -1,6 +1,6 @@
 # ai-orchestrator
 
-The AI orchestration layer meant to connect the AROL Customer Platform backend to a set of specialized AI agents. It's a LangGraph graph that routes each request (via an LLM classifier) to a `technical_agent` — grounded in machine manuals (RAG), live telemetry, fleet data, and service tickets — or a `commercial_agent` (currently a stub). See [Documentation](docs/README.md) for the current architecture and what's real vs. mocked/stubbed today.
+The AI orchestration layer meant to connect the AROL Customer Platform backend to a set of specialized AI agents. It's a LangGraph graph that routes each request (via an LLM classifier) to a `technical_agent` — grounded in machine manuals (RAG), live telemetry, fleet data, and maintenance tickets — or a `commercial_agent` — grounded in quotes and orders. Both agents are composed from reusable `Skill`s (a named bundle of prompt instructions + tools, see `src/skills/`); every tool re-authorizes itself server-side against the requesting user's own company and visibility tier, never trusting anything the model claims. See [Documentation](docs/README.md) for the current architecture.
 
 ## How to run it
 
@@ -28,6 +28,7 @@ The AI orchestration layer meant to connect the AROL Customer Platform backend t
    | `POSTGRES_HOST` | Postgres host | `localhost` |
    | `POSTGRES_PORT` | Postgres port | `5432` |
    | `ASSISTANT_DB` | Database name to create/use for the assistant | `assistant` |
+   | `REFERENCE_DATE` | "Today" the agents reason relative dates from (overdue/recency), pinned inside the synthetic dataset's date window | `2026-08-05` |
 5. Create the database, load the fleet dataset (`data/AROL_Q2_synthetic_fleet_dataset.xlsx`), and index any manual PDFs found under `data/manuals/`:
    ```bash
    python -m src.db.startup
