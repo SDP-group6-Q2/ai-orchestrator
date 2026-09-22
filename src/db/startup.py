@@ -78,14 +78,6 @@ def create_manuals_tables(user, password, host, port, dbname):
                 CREATE INDEX IF NOT EXISTS ix_manual_chunks_company_machine
                 ON manual_chunks (company_id, machine_id);
             """)
-
-            # A machine has exactly one manual (per the dataset spec), so the
-            # Supabase Storage object key for its PDF is a plain attribute of the
-            # machine itself, not a separate mapping table. Postgres never holds
-            # the file bytes, only this reference -- see sync_manual_storage_paths.
-            cursor.execute("""
-                ALTER TABLE machines ADD COLUMN IF NOT EXISTS storage_path TEXT;
-            """)
             print("pgvector extension and manuals RAG tables ready.")
     except Exception as e:
         print(f"Error: {e}")
@@ -101,11 +93,22 @@ def sync_manual_storage_paths(user, password, host, port, dbname) -> None:
     bucket, matching each object's filename back to its machine via
     serialnumber -- the same join index_all_manuals() uses for the RAG chunks.
 
+    A machine has exactly one manual (per the dataset spec), so the Supabase
+    Storage object key for its PDF is a plain attribute of the machine itself,
+    not a separate mapping table. Postgres never holds the file bytes, only
+    this reference. The column is added here, not in create_manuals_tables,
+    because main() calls load_from_excel (which drops/recreates "machines"
+    from the raw spreadsheet with if_exists='replace') in between -- adding it
+    any earlier would just have it wiped out again before this function runs.
+
     Idempotent: re-running just re-sets the same values, so it's safe to call
     every startup even though the bucket's contents rarely change."""
     conn = psycopg2.connect(dbname=dbname, user=user, password=password, host=host, port=port)
     conn.autocommit = True
     try:
+        with conn.cursor() as cursor:
+            cursor.execute("ALTER TABLE machines ADD COLUMN IF NOT EXISTS storage_path TEXT;")
+
         filenames = list_bucket_filenames()
         with conn.cursor() as cursor:
             for filename in filenames:
@@ -161,5 +164,5 @@ def main():
     print("Manuals indexed.")
 
 
-if "__main__" == "__main__":
+if __name__ == "__main__":
     main()
