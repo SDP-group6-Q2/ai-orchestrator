@@ -1,4 +1,4 @@
-"""Manuals RAG skill for FleetAssistant.
+"""Manuals RAG skill for the assistant.
 
 No LLM in this path: the retrieval stage must receive the user's question
 exactly as asked, so manuals_agent calls get_manual_excerpts_for_company

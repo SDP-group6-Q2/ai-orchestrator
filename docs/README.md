@@ -8,7 +8,7 @@ source in this repo to regenerate it from — treat the diagram and text below a
 source of truth until it's redrawn.)*
 
 ```
-FleetAssistant.ask(question, user_id, machine_id, history=None)
+src.assistant.ask(question, user_id, machine_id, history=None)   <- also served as POST /chat (src/server.py)
       |
       v
  build_graph (LangGraph StateGraph)
@@ -33,8 +33,8 @@ FleetAssistant.ask(question, user_id, machine_id, history=None)
  response
 ```
 
-*(There is no HTTP API in this repo. The entry points here are `src/run_in_terminal.py`
-and calling `FleetAssistant` directly from Python.)*
+*(The HTTP entry point is a single `POST /chat` in `src/server.py`; the other entry points are
+`src/run_in_terminal.py` and calling `src.assistant.ask` directly from Python.)*
 
 Both `technical_agent` and `commercial_agent` are a single `create_agent` each, composed
 from reusable **skills** (`src/skills/`) rather than one hand-written prompt string and a
@@ -42,7 +42,7 @@ flat tool list — there's no separate "supervisor" layer, and no nested sub-age
 
 ```mermaid
 flowchart TD
-    Start([FleetAssistant.ask]) --> Router{llm_classify_intent}
+    Start([assistant.ask]) --> Router{llm_classify_intent}
     Router --> CheckAccess{check_access}
 
     CheckAccess -->|technical, authorized| Technical
@@ -78,20 +78,33 @@ flowchart TD
     AccessDenied --> End
 ```
 
-## FleetAssistant
+## Assistant entry points
 
-`FleetAssistant` (`src/FleetAssistant.py`) is the entry point. It wraps `build_graph`
-(`src/graph.py`): an LLM router (`llm_classify_intent`) that classifies each request,
-an access gate (`check_access`), and dispatch to exactly one branch — `technical_agent`,
-`commercial_agent`, `out_of_scope`, or `access_denied` — then straight to `END`. There's
-no supervisor/handoff loop between branches; each request is routed once.
+`src/assistant.py` exposes `ask` (returns the answer text) and `run` (returns the full graph
+state). Both wrap the graph built by `build_graph` (`src/graph.py`), which is constructed once
+per process on first use (`get_graph`, model from `LLAMA_MODEL` / `LLAMA_BASE_URL`): an LLM
+router (`llm_classify_intent`) that classifies each request, an access gate (`check_access`),
+and dispatch to exactly one branch — `technical_agent`, `commercial_agent`, `out_of_scope`, or
+`access_denied` — then straight to `END`. There's no supervisor/handoff loop between branches;
+each request is routed once.
 
-`FleetAssistant.run`/`.ask` take an optional `history` argument (a list of
+`ask`/`run` take an optional `history` argument (a list of
 `{"role": "user" | "assistant", "content": str}` dicts, oldest first), prepended as
-`HumanMessage`/`AIMessage` turns before the current question. Each `FleetAssistant`
-instance builds its own fresh `InMemorySaver` checkpointer and per-user `thread_id`, so
-relying on the checkpointer for cross-request memory doesn't work when a new instance is
-built per request — the caller is expected to persist and re-supply `history` itself.
+`HumanMessage`/`AIMessage` turns before the current question. Every call uses a fresh
+`thread_id` on the shared `InMemorySaver`, so the checkpointer never carries memory across
+requests — the caller is expected to persist and re-supply `history` itself.
+
+`src/server.py` serves this over HTTP with a single endpoint:
+
+```
+POST /chat
+{"question": "...", "user_id": "USR-007", "machine_id": "MCH-0008",
+ "history": [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]}
+-> {"answer": "..."}
+```
+
+Run it with `uvicorn src.server:app --port 8001`. There is no authentication on it yet, so it
+must only be reachable from trusted services (in docker compose it is not published to the host).
 
 ### Skills (`src/skills/`)
 
@@ -144,14 +157,14 @@ hallucinated or conversation-history "knowledge" without calling any gated tool 
 ### Context-based defaults
 
 `AgentContext(user_id, machine_id)` (`src/context.py`) is passed into the graph via
-LangGraph's `context=` mechanism at `FleetAssistant.run` — a hard channel, never part of
+LangGraph's `context=` mechanism at `assistant.run` — a hard channel, never part of
 checkpointed state and never LLM-visible or LLM-modifiable, read by tools via
 `ToolRuntime.context`. `machine_id` is optional on every tool that takes one
 (`resolve_machine_id`, `src/tools/fleet_directory.py`): it defaults to
 `runtime.context.machine_id` when the model omits it, so the model only needs to supply
 `machine_id` explicitly to ask about a *different* machine than the one already scoped to
 the conversation — it no longer has to correctly retype the current one on every call. A
-separate, LLM-visible `SystemMessage` (also built in `FleetAssistant.run`) tells the model
+separate, LLM-visible `SystemMessage` (also built in `assistant.run`) tells the model
 what the current `machine_id` is, purely so it can refer to "this machine" when
 contrasting it with another — it is not what enforces correctness or authorization.
 
@@ -167,7 +180,7 @@ telemetry averages; alarms grouped by code and severity) instead of raw rows for
 trend/pattern questions — an unbounded `get_telemetry_history` for one machine's 30-day
 history measured at ~73K tokens in a single tool call before these existed.
 
-To try it directly from a terminal instead of through the (not yet implemented) HTTP API:
+To try it directly from a terminal instead of through the HTTP API:
 ```bash
 python -m src.run_in_terminal --question "..." --user-id u1 --machine-id MCH-0001
 ```

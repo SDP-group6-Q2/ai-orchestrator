@@ -1,4 +1,4 @@
-"""FleetAssistant tools."""
+"""Assistant tools."""
 
 from src.tools.orders_tools import (
     get_order_details,

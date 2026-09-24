@@ -1,4 +1,4 @@
-"""Interactive terminal runner for FleetAssistant.
+"""Interactive terminal runner for the assistant.
 
 Usage (from the project root):
     python -m local_run.run
@@ -10,12 +10,13 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 
-from src import FleetAssistant
+from src.assistant import ask
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run FleetAssistant locally from the terminal.")
+    parser = argparse.ArgumentParser(description="Run the assistant locally from the terminal.")
     parser.add_argument("--question", help="Single question to ask, then exit. Omit to start an interactive session.")
     parser.add_argument("--user-id", default="USR-007", help="User id to attach to the request.")
     parser.add_argument("--machine-id", default="MCH-0008", type=str, help="Machine id to attach to the request.")
@@ -26,21 +27,23 @@ def _parse_args() -> argparse.Namespace:
 
 
 
-def _run_once(assistant: FleetAssistant, question: str, user_id: str, machine_id: str) -> None:
-    result = assistant.ask(question, user_id=user_id, machine_id=machine_id)
+def _run_once(question: str, user_id: str, machine_id: str) -> None:
+    result = ask(question, user_id=user_id, machine_id=machine_id)
     print(f"\nAssistant: {result}\n")
 
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     args = _parse_args()
-    assistant = FleetAssistant(model=args.model, llama_base_url=args.base_url)
+    # Read when src.assistant builds its graph, lazily on the first ask.
+    os.environ["LLAMA_MODEL"] = args.model
+    os.environ["LLAMA_BASE_URL"] = args.base_url
 
     if args.question:
-        _run_once(assistant, args.question, args.user_id, args.machine_id)
+        _run_once(args.question, args.user_id, args.machine_id)
         return
 
-    print("FleetAssistant local terminal session. Type 'exit' or 'quit' to stop.\n")
+    print("Assistant local terminal session. Type 'exit' or 'quit' to stop.\n")
     while True:
         try:
             question = input("You: ").strip()
@@ -53,7 +56,7 @@ def main() -> None:
         if question.lower() in {"exit", "quit"}:
             break
 
-        _run_once(assistant, question, args.user_id, args.machine_id)
+        _run_once(question, args.user_id, args.machine_id)
 
 
 if __name__ == "__main__":

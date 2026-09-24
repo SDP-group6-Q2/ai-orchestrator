@@ -120,7 +120,7 @@ def build_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):
         # comment: it seems ollama bypasses the structured output functionality, so this might fail with ollama. Thats why include formatting the output as json in the system prompt.
         all_messages = state["messages"]
 
-        # FleetAssistant.run always puts the user_id/machine_id SystemMessage first; it must
+        # assistant.run always puts the user_id/machine_id SystemMessage first; it must
         # survive windowing or technical_agent loses which machine to query tools against.
         leading_context = all_messages[:1] if all_messages and isinstance(all_messages[0], SystemMessage) else []
         rest = all_messages[len(leading_context):]
@@ -142,7 +142,7 @@ def build_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):
         # window has to become state["messages"] itself for them to only see what the router
         # used. add_messages only appends by id -- RemoveMessage is the supported way to shrink
         # it. This permanently drops the trimmed messages from this graph run's own state/
-        # checkpoint, which is fine here: FleetAssistant's checkpointer is per-request and never
+        # checkpoint, which is fine here: the checkpointer is per-request (a fresh thread per call) and never
         # relied on for persistence -- the backend's Postgres history is the source of truth and
         # is reloaded in full on every call regardless of what this graph run trims.
         window_ids = {m.id for m in window}

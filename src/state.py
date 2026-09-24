@@ -1,4 +1,4 @@
-"""Shared state typing for the FleetAssistant orchestration flow."""
+"""Shared state typing for the assistant orchestration flow."""
 
 from typing import TypedDict, Annotated
 from langgraph.graph.message import add_messages

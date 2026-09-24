@@ -28,6 +28,8 @@ The AI orchestration layer meant to connect the AROL Customer Platform backend t
    | `POSTGRES_HOST` | Postgres host | `localhost` |
    | `POSTGRES_PORT` | Postgres port | `5432` |
    | `ASSISTANT_DB` | Database name to create/use for the assistant | `assistant` |
+   | `LLAMA_MODEL` / `LLAMA_BASE_URL` | Ollama model and server | `gpt-oss:20b-cloud` / `http://localhost:11434` |
+   | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Supabase project holding the manuals bucket | — |
    | `REFERENCE_DATE` | "Today" the agents reason relative dates from (overdue/recency), pinned inside the synthetic dataset's date window | `2026-08-05` |
 5. Create the database, load the fleet dataset (`data/AROL_Q2_synthetic_fleet_dataset.xlsx`), and index any manual PDFs found under `data/manuals/`:
    ```bash
@@ -35,7 +37,8 @@ The AI orchestration layer meant to connect the AROL Customer Platform backend t
    ```
 6. Run Assistant:
    ```bash
-   python -m src.run_in_terminal
+   python -m src.run_in_terminal          # in the terminal
+   uvicorn src.server:app --port 8001     # as an HTTP service (POST /chat)
    ```
 
 ## How it works

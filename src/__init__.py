@@ -1,6 +1,6 @@
-"""FleetAssistant package exports."""
+"""Assistant package exports."""
 
-from src.FleetAssistant import FleetAssistant
+from src.assistant import ask, run
 from src.state import GraphState
 
-__all__ = ["FleetAssistant", "GraphState"]
+__all__ = ["ask", "run", "GraphState"]

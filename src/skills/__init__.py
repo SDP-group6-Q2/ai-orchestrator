@@ -1,4 +1,4 @@
-"""Skill definitions shared across FleetAssistant agents."""
+"""Skill definitions shared across assistant agents."""
 
 from src.skills.base import Skill, compose
 from src.skills.diagnostics import diagnostics_skill
