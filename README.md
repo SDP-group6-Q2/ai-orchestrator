@@ -32,3 +32,20 @@ python -m src.run_in_terminal --email user@example.com --password '...' --api-ur
 | `REFERENCE_DATE` | "Today" the agents reason relative dates from, pinned inside the dataset's date window | `2026-08-05` |
 
 Tests: `pip install -r requirements-dev.txt && pytest`.
+
+## Tracing (LangSmith)
+
+Every request can be traced to [LangSmith](https://smith.langchain.com): each model call, tool call and the whole
+run, labelled with the user's access tier (never their identity or token). It is opt-in and configured only by
+environment variables (compose passes them to this service from the root `.env`):
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `LANGSMITH_TRACING` | `true` to send traces | `false` |
+| `LANGSMITH_ENDPOINT` | LangSmith API | `https://api.smith.langchain.com` |
+| `LANGSMITH_API_KEY` | Your LangSmith API key (keep it in `.env`, never commit it) | |
+| `LANGSMITH_PROJECT` | Project the traces go to | `ai-orchestrator` |
+
+Traces contain the users' questions, the tools' results (quotes, tickets, manual text) and the answers, so only
+enable tracing for a project whose members may see that data. The end user's JWT is kept out of traces
+(`AgentContext.token` is a `SecretStr`).

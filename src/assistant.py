@@ -15,6 +15,7 @@ from typing import Any, TypedDict
 from langchain.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 from langgraph.checkpoint.memory import InMemorySaver
+from pydantic import SecretStr
 
 from src.agent import build_agent
 from src.context import AgentContext
@@ -101,8 +102,18 @@ async def run(
         },  # type: ignore
         # The agent is shared across requests, so each call gets its own thread: reusing one would make the
         # checkpointer accumulate messages across requests. The caller owns history.
-        config={"configurable": {"thread_id": str(uuid.uuid4())}},
-        context=AgentContext(machine_id=machine_id, visibility=visibility, token=token),
+        config={
+            "configurable": {"thread_id": str(uuid.uuid4())},
+            # Labels for LangSmith traces (when enabled): searchable by tier, never by user, and never the token.
+            "run_name": "assistant-chat",
+            "tags": [f"tier:{visibility}"],
+            "metadata": {
+                "visibility": visibility,
+                "machine_in_scope": bool(machine_id),
+                "history_messages": len(history),
+            },
+        },
+        context=AgentContext(machine_id=machine_id, visibility=visibility, token=SecretStr(token)),
     )
 
 

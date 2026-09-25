@@ -46,7 +46,7 @@ async def test_traces_of_earlier_turns_go_into_the_context_message(agent):
 async def test_identity_travels_in_the_context_not_the_messages(agent):
     await assistant.ask("q", "MCH-0002", "commercial", "secret-token", history=[])
     payload, context = agent.calls[0]
-    assert (context.machine_id, context.visibility, context.token) == ("MCH-0002", "commercial", "secret-token")
+    assert (context.machine_id, context.visibility, context.token.get_secret_value()) == ("MCH-0002", "commercial", "secret-token")
     assert "secret-token" not in str(payload)
 
 

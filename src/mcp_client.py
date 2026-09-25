@@ -34,7 +34,8 @@ async def add_user_token(
 ) -> object:
     """Tool-call interceptor: send the caller's JWT as the Authorization header of the MCP request."""
     context = getattr(request.runtime, "context", None)
-    token = getattr(context, "token", None)
+    secret = getattr(context, "token", None)
+    token = secret.get_secret_value() if secret is not None else None
     if not token:
         # An MCP-style error result, not an exception: the adapter turns it into tool-error text the model can
         # relay, whereas a raised exception would abort the whole request.

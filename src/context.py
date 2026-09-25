@@ -7,11 +7,15 @@ which tools the model sees) and by the MCP client's interceptor (which attaches 
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+
+from pydantic import SecretStr
 
 
 @dataclass
 class AgentContext:
     machine_id: str | None  # None when the question is not about a specific machine
     visibility: str  # the user's tier: "full" | "technician" | "commercial" (used by the graph's gate)
-    token: str = field(repr=False)  # the end user's JWT, forwarded to the MCP server; never logged
+    # The end user's JWT, forwarded to the MCP server. A SecretStr so it is masked when this object is printed,
+    # logged or serialized (e.g. into a LangSmith trace of the run, which records the runtime context).
+    token: SecretStr

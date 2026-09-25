@@ -4,12 +4,14 @@ import pytest
 from langchain_core.tools import StructuredTool
 from langchain_mcp_adapters.interceptors import MCPToolCallRequest
 
+from pydantic import SecretStr
+
 from src.context import AgentContext
 from src.mcp_client import MissingToolsError, add_user_token, select_tools
 
 
 def _request(token: str | None, headers=None) -> MCPToolCallRequest:
-    context = AgentContext(machine_id="MCH-0001", visibility="full", token=token) if token is not None else None
+    context = AgentContext(machine_id="MCH-0001", visibility="full", token=SecretStr(token)) if token is not None else None
     return MCPToolCallRequest(
         name="get_company_machines", args={}, server_name="arol", headers=headers, runtime=SimpleNamespace(context=context)
     )
@@ -36,7 +38,8 @@ async def test_interceptor_refuses_to_call_without_a_token(token):
 
 
 def test_token_is_not_in_the_context_repr():
-    assert "secret-token" not in repr(AgentContext(machine_id="M", visibility="full", token="secret-token"))
+    context = AgentContext(machine_id="M", visibility="full", token=SecretStr("secret-token"))
+    assert "secret-token" not in repr(context) and "secret-token" not in str(context)
 
 
 def _tools(*names):
