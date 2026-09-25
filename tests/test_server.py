@@ -59,3 +59,11 @@ def test_upstream_failures_are_mapped_not_500(monkeypatch, error, status):
 
     _ask(monkeypatch, boom)
     assert client.post("/chat", json=BODY, headers=AUTH).status_code == status
+
+
+def test_machine_id_is_optional(monkeypatch):
+    calls = _ask(monkeypatch, lambda: AskResult("ok", []))
+    body = {k: v for k, v in BODY.items() if k != "machine_id"}
+    assert client.post("/chat", json=body, headers=AUTH).status_code == 200
+    assert calls[0][1] is None
+    assert client.post("/chat", json={**BODY, "machine_id": None}, headers=AUTH).status_code == 200

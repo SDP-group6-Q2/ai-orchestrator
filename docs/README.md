@@ -97,13 +97,14 @@ again for fresh or complete data".
 ### Entry points
 
 `src/assistant.py` exposes `ask` (returns the answer and the trace) and `run` (the full agent state). Both are
-`async` and take `question, machine_id, visibility, token, history=None`.
+`async` and take `question, machine_id (or None), visibility, token, history=None`.
 
 `src/server.py` serves it over HTTP with one endpoint:
 
 ```
 POST /chat        Authorization: Bearer <the end user's JWT>
-{"question": "...", "machine_id": "MCH-0001", "visibility": "technician",
+{"question": "...", "machine_id": "MCH-0001",   // optional: omit for questions not about one machine
+ "visibility": "technician",
  "history": [{"role": "user", "content": "..."},
              {"role": "assistant", "content": "...", "trace": [{"tool": "...", "args": {}, "summary": "...", "error": false}]}]}
 -> {"answer": "...", "trace": [ ... ]}

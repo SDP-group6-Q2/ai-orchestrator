@@ -41,7 +41,7 @@ class HistoryTurn(BaseModel):
 
 class ChatRequest(BaseModel):
     question: str
-    machine_id: str
+    machine_id: str | None = None  # the machine the question is about, if any
     visibility: Literal["full", "technician", "commercial"]
     history: list[HistoryTurn] = []
 

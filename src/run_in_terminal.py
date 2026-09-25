@@ -24,7 +24,7 @@ from src.assistant import HistoryTurn, ask
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the assistant locally from the terminal.")
     parser.add_argument("--question", help="Single question to ask, then exit. Omit to start an interactive session.")
-    parser.add_argument("--machine-id", default="MCH-0001", help="Machine in scope for the conversation.")
+    parser.add_argument("--machine-id", default=None, help="Machine in scope for the conversation (optional).")
     parser.add_argument("--model", default="gpt-oss:20b-cloud", help="Ollama model name.")
     parser.add_argument("--base-url", default="http://localhost:11434", help="Ollama server base URL.")
 
@@ -58,7 +58,7 @@ def _credentials(args: argparse.Namespace) -> tuple[str, str]:
 
 
 async def _run_once(
-    question: str, machine_id: str, visibility: str, token: str, history: list[HistoryTurn]
+    question: str, machine_id: str | None, visibility: str, token: str, history: list[HistoryTurn]
 ) -> None:
     result = await ask(question, machine_id=machine_id, visibility=visibility, token=token, history=history)
     print(f"\nAssistant: {result.answer}\n")

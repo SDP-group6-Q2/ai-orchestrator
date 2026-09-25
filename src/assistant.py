@@ -67,18 +67,21 @@ async def get_agent():
         return _agent
 
 
-def _context_message(machine_id: str, history: list[HistoryTurn]) -> SystemMessage:
-    text = (
-        f"Current machine_id: {machine_id}. Pass this machine_id to any tool that needs one, "
-        "unless the user asks about a different machine."
-    )
+def _context_message(machine_id: str | None, history: list[HistoryTurn]) -> SystemMessage:
+    if machine_id:
+        text = (
+            f"Current machine_id: {machine_id}. Pass this machine_id to any tool that needs one, "
+            "unless the user asks about a different machine."
+        )
+    else:
+        text = "No machine is in scope for this conversation."
     earlier = render_trace_context(history)  # type: ignore[arg-type]
     return SystemMessage(content=f"{text}\n\n{earlier}" if earlier else text)
 
 
 async def run(
     question: str,
-    machine_id: str,
+    machine_id: str | None,
     visibility: str,
     token: str,
     history: list[HistoryTurn] | None = None,
@@ -105,7 +108,7 @@ async def run(
 
 async def ask(
     question: str,
-    machine_id: str,
+    machine_id: str | None,
     visibility: str,
     token: str,
     history: list[HistoryTurn] | None = None,

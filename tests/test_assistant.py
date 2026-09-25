@@ -53,3 +53,12 @@ async def test_identity_travels_in_the_context_not_the_messages(agent):
 async def test_ask_returns_the_answer_and_this_turns_trace(agent):
     result = await assistant.ask("q", "MCH-0001", "full", "tok")
     assert result.answer == "the answer" and result.trace == []
+
+
+async def test_a_question_without_a_machine_has_no_machine_in_scope(agent):
+    await assistant.ask("what quotes do we have?", None, "commercial", "tok")
+    payload, context = agent.calls[0]
+    assert context.machine_id is None
+    first = payload["messages"][0]
+    assert isinstance(first, SystemMessage) and first.content.startswith("No machine is in scope")
+    assert "machine_id: None" not in first.content

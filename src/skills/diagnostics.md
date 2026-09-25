@@ -10,7 +10,7 @@ tools:
   - get_alarm_history
   - get_maintenance_history
 ---
-Every one of these tools takes a machine_id: always pass it explicitly (the machine in scope for this conversation unless the user asks about another one).
+Every one of these tools takes a machine_id: always pass it explicitly (the machine in scope for this conversation, or the one the user names).
 
 Use get_latest_telemetry_snapshot for the machine's current operational status, production rate, uptime, alarm count, temperature, energy usage and health note.
 Use get_telemetry_summary for trend/pattern questions or performance-degradation analysis spanning more than a few days -- it returns per-day/week aggregates, optionally narrowed with since/until.
