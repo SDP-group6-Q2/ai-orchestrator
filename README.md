@@ -1,46 +1,33 @@
 # ai-orchestrator
 
-The AI orchestration layer meant to connect the AROL Customer Platform backend to a set of specialized AI agents. It's a LangGraph graph that routes each request (via an LLM classifier) to a `technical_agent` — grounded in machine manuals (RAG), live telemetry, fleet data, and maintenance tickets — or a `commercial_agent` — grounded in quotes and orders. Both agents are composed from reusable `Skill`s (a named bundle of prompt instructions + tools, see `src/skills/`); every tool re-authorizes itself server-side against the requesting user's own company and visibility tier, never trusting anything the model claims. See [Documentation](docs/README.md) for the current architecture.
+The AI layer of the AROL Customer Platform: a LangGraph graph that routes each request (via an LLM classifier)
+to a `technical_agent` (machines, telemetry, alarms, maintenance tickets, manuals) or a `commercial_agent`
+(quotes and orders). It holds no data of its own: the agents' tools come from the **MCP server**, which calls
+the platform API with the end user's own token. See [Documentation](docs/README.md).
 
-## How to run it
+## Run it
 
-1. Install and start [Ollama](https://ollama.com/download), then pull a model that supports tool calling (e.g. `llama3.1`, or `llama3.1:cloud` / `gpt-oss:20b-cloud` if using Ollama's cloud tier):
-   ```bash
-   ollama pull llama3.1
-   ```
-2. Create and activate a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/Scripts/activate   # Windows Git Bash
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-4. Start a [PostgreSQL](https://www.postgresql.org/download/) server, then copy `.env.example` to `.env` and fill in your credentials:
-   ```bash
-   cp .env.example .env
-   ```
-   | Variable | Description | Default |
-   | --- | --- | --- |
-   | `POSTGRES_USER` | Postgres username | `your_username` |
-   | `POSTGRES_PASSWORD` | Postgres password | `your_password` |
-   | `POSTGRES_HOST` | Postgres host | `localhost` |
-   | `POSTGRES_PORT` | Postgres port | `5432` |
-   | `ASSISTANT_DB` | Database name to create/use for the assistant | `assistant` |
-   | `LLAMA_MODEL` / `LLAMA_BASE_URL` | Ollama model and server | `gpt-oss:20b-cloud` / `http://localhost:11434` |
-   | `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | Supabase project holding the manuals bucket | — |
-   | `REFERENCE_DATE` | "Today" the agents reason relative dates from (overdue/recency), pinned inside the synthetic dataset's date window | `2026-08-05` |
-5. Create the database, load the fleet dataset (`data/AROL_Q2_synthetic_fleet_dataset.xlsx`), and index any manual PDFs found under `data/manuals/`:
-   ```bash
-   python -m src.db.startup
-   ```
-6. Run Assistant:
-   ```bash
-   python -m src.run_in_terminal          # in the terminal
-   uvicorn src.server:app --port 8001     # as an HTTP service (POST /chat)
-   ```
+Normally through docker compose, from the project root: the backend calls `POST /chat` on this service.
 
-## How it works
+```bash
+docker compose up -d           # db, api, mcp-server and orchestrator
+```
 
-Refer to [Documentation](docs/README.md)
+To try it directly from a terminal (needs the MCP server and the API running, and [Ollama](https://ollama.com/download)
+with a tool-calling model such as `gpt-oss:20b-cloud`):
+
+```bash
+python -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+export MCP_SERVER_URL=http://localhost:9000/mcp
+python -m src.run_in_terminal --email user@example.com --password '...' --api-url http://localhost:8000 \
+    --machine-id MCH-0001
+```
+
+| Variable | Description | Default |
+| --- | --- | --- |
+| `MCP_SERVER_URL` | The MCP server's streamable-HTTP endpoint | `http://localhost:9000/mcp` |
+| `LLAMA_MODEL` / `LLAMA_BASE_URL` | Ollama model and server | `gpt-oss:20b-cloud` / `http://localhost:11434` |
+| `REFERENCE_DATE` | "Today" the agents reason relative dates from, pinned inside the dataset's date window | `2026-08-05` |
+
+Tests: `pip install -r requirements-dev.txt && pytest`.

@@ -1,9 +1,10 @@
-"""Graph wiring for the FleetAssistant orchestration flow."""
+"""Graph wiring for the assistant orchestration flow."""
 
 from pydantic import BaseModel, Field
 from typing_extensions import Literal
 
 from langchain_core.language_models import BaseChatModel
+from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import START, StateGraph, END
 from langchain.messages import SystemMessage
@@ -13,11 +14,7 @@ from langgraph.runtime import Runtime
 
 from src.state import GraphState as State
 from src.context import AgentContext
-from src.security.access import (
-    can_access_commercial_data,
-    can_access_machine_identity,
-    get_user_context,
-)
+from src.access import can_access_commercial_data, can_access_machine_identity
 
 from src.agents import (make_commercial_agent, make_technical_agent)
 
@@ -33,10 +30,14 @@ _ROUTER_SYSTEM_PROMPT = (
     " - Identify performance degradation"
     " - Correlate alarms with maintenance history "
     " - Consult information about maintenance tickets and their status; "
+    " - Identify the company's machines and describe a machine: its model, configuration, plant, delivery and manual; "
 
     " **commercial: **  "
-    " - Retrieve quotation and order history; "
-    " - Answer questions on the commercial relationship with a customer."
+    " - Retrieve the company's own quotation and order records (quotes, revisions, prices, orders, shipments); "
+    " - Answer questions on the commercial relationship with a customer. "
+    " Only questions about the company's own quote and order records are commercial: questions about HOW to do "
+    "something with the machine or its documentation -- including how to order spare parts, which the manual "
+    "explains -- are technical. "
 
     " **out_of_scope: **  "
     " - Requests that are not related to technical or commercial topics. "
@@ -60,7 +61,32 @@ class Route(BaseModel):
     needs_more_context: bool = Field(False, description="True if classification needs more conversation history than was given")
 
 
-def build_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):
+def check_access(state: State, runtime: Runtime[AgentContext]):
+    # Runs right after intent classification, before any specialist agent is invoked -- a per-request check
+    # that denies a whole category of request up front, on the visibility tier the caller passed in. This
+    # closes a blind spot the tools' own access checks can't: if the LLM answers a commercial/technical
+    # question without calling any tool at all (e.g. from hallucinated or conversation-history
+    # "knowledge"), there's no tool call to deny. It is defense-in-depth: the real enforcement is the
+    # API's, applied to every tool call with the user's own token.
+    #
+    # The "technical" intent spans two domains that don't share a visibility requirement: machine
+    # identity/manuals (every tier) and telemetry/alarms/tickets (technician/full only). This gate only
+    # checks the wider one, so it can't wrongly turn away a commercial user asking about their own machine
+    # or its manual; the narrower restriction is enforced by the API on each tool call.
+    intent = state["intent"]
+    if intent not in ("commercial", "technical"):
+        return {}
+
+    visibility = runtime.context.visibility
+    if intent == "commercial" and not can_access_commercial_data(visibility):
+        return {"intent": "access_denied"}
+    if intent == "technical" and not can_access_machine_identity(visibility):
+        return {"intent": "access_denied"}
+
+    return {}
+
+
+def build_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver, tools: list[BaseTool]):
     if not checkpointer:
         raise ValueError("A checkpointer must be provided to build the graph.")
 
@@ -79,39 +105,7 @@ def build_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):
         )
         return state
 
-    def check_access(state: State, runtime: Runtime[AgentContext]):
-        # Runs right after intent classification, before any specialist agent is invoked --
-        # a per-request, single lookup that denies a whole category of request up front,
-        # rather than relying only on each tool's own per-call visibility gate. This also
-        # covers a blind spot the tool-level gates can't: if the LLM answers a commercial/
-        # technical question without calling any gated tool at all (e.g. from hallucinated
-        # or conversation-history "knowledge"), there's no tool call to deny -- routing the
-        # unauthorized intent away before the specialist agent ever runs closes that gap.
-        #
-        # The "technical" intent spans two spec domains that don't share a visibility
-        # requirement: machine identity/manuals (every tier, per the access model) and
-        # telemetry/alarms/tickets (technician/full only). This gate only checks the
-        # wider one -- can_access_machine_identity -- so it can't wrongly turn away a
-        # commercial user asking about their own machine or its manual. The narrower
-        # telemetry/alarms/tickets restriction is enforced per-call by those tools'
-        # own can_access_technical_data checks (telemetry_tools._authorized_machine
-        # and service_tools' equivalent), which run regardless of this gate.
-        intent = state["intent"]
-        if intent not in ("commercial", "technical"):
-            return {}
-
-        user_context = get_user_context(runtime.context.user_id)
-        if user_context is None:
-            return {"intent": "access_denied"}
-
-        if intent == "commercial" and not can_access_commercial_data(user_context):
-            return {"intent": "access_denied"}
-        if intent == "technical" and not can_access_machine_identity(user_context):
-            return {"intent": "access_denied"}
-
-        return {}
-
-    def llm_classify_intent(state: State):
+    async def llm_classify_intent(state: State):
         # Classify using an escalating window of the conversation, not always the full history:
         # most turns are classifiable from just the latest message or two, and re-sending the
         # whole conversation to the router every turn is wasted cost as it grows. Start minimal
@@ -128,7 +122,7 @@ def build_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):
         window = all_messages
         for size in _HISTORY_WINDOW_SIZES:
             window = leading_context + rest[-size:]
-            decision = router.invoke(
+            decision = await router.ainvoke(
                 [
                     SystemMessage(content=_ROUTER_SYSTEM_PROMPT),
                     *window,
@@ -155,8 +149,8 @@ def build_graph(llm: BaseChatModel, checkpointer: BaseCheckpointSaver):
     router_builder = StateGraph(State, context_schema=AgentContext)
     router_builder.add_node("llm_classify_intent", llm_classify_intent)
     router_builder.add_node("check_access", check_access)
-    router_builder.add_node("commercial_agent", make_commercial_agent(llm, checkpointer=checkpointer))
-    router_builder.add_node("technical_agent", make_technical_agent(llm, checkpointer=checkpointer))
+    router_builder.add_node("commercial_agent", make_commercial_agent(llm, tools, checkpointer=checkpointer))
+    router_builder.add_node("technical_agent", make_technical_agent(llm, tools, checkpointer=checkpointer))
     router_builder.add_node("out_of_scope", out_of_scope)
     router_builder.add_node("access_denied", access_denied)
 

@@ -1,10 +1,14 @@
-"""Assistant entry points: `ask` / `run` over the LangGraph orchestration graph."""
+"""Assistant entry points: `ask` / `run` over the LangGraph orchestration graph.
+
+Async, because the agents' tools (MCP calls) are. The graph is built once per process, on first use, after
+the MCP tools have been loaded.
+"""
 
 from __future__ import annotations
 
+import asyncio
 import os
 import uuid
-from functools import lru_cache
 from typing import TypedDict, cast
 
 from langchain.messages import AIMessage, HumanMessage, SystemMessage
@@ -13,6 +17,7 @@ from langgraph.checkpoint.memory import InMemorySaver
 
 from src.context import AgentContext
 from src.graph import build_graph
+from src.mcp_client import load_tools
 from src.state import GraphState
 
 
@@ -31,47 +36,61 @@ def _history_to_messages(history: list[HistoryTurn]) -> list[HumanMessage | AIMe
     return messages
 
 
-@lru_cache(maxsize=1)
-def get_graph():
-    """Build the graph once per process. Model settings come from LLAMA_MODEL / LLAMA_BASE_URL."""
-    llm = ChatOllama(
-        model=os.getenv("LLAMA_MODEL", "gpt-oss:20b-cloud"),
-        base_url=os.getenv("LLAMA_BASE_URL", "http://localhost:11434"),
-    )
-    return build_graph(llm=llm, checkpointer=InMemorySaver())
+_graph = None
+_graph_lock = asyncio.Lock()
 
 
-def run(
+async def get_graph():
+    """Build the graph once per process. Model settings come from LLAMA_MODEL / LLAMA_BASE_URL.
+
+    Raises McpUnavailableError if the MCP server's tools can't be loaded; the next call retries."""
+    global _graph
+    async with _graph_lock:
+        if _graph is None:
+            tools = await load_tools()
+            llm = ChatOllama(
+                model=os.getenv("LLAMA_MODEL", "gpt-oss:20b-cloud"),
+                base_url=os.getenv("LLAMA_BASE_URL", "http://localhost:11434"),
+            )
+            _graph = build_graph(llm=llm, checkpointer=InMemorySaver(), tools=tools)
+        return _graph
+
+
+async def run(
     question: str,
-    user_id: str,
     machine_id: str,
+    visibility: str,
+    token: str,
     history: list[HistoryTurn] | None = None,
 ) -> GraphState:
+    """Run one request. `token` is the end user's JWT: it is forwarded to the MCP server on every tool
+    call (never shown to the model), and `visibility` is their tier, used by the graph's up-front gate."""
     context_message = SystemMessage(
         content=(
-            f"Current user_id: {user_id}. Current machine_id: {machine_id}. "
-            "Tools default to this machine automatically when machine_id is omitted -- only pass a "
-            "different machine_id if the user asks about another machine."
+            f"Current machine_id: {machine_id}. Pass this machine_id to any tool that needs one, "
+            "unless the user asks about a different machine."
         )
     )
     prior_messages = _history_to_messages(history) if history else []
-    result = get_graph().invoke(
+    graph = await get_graph()
+    result = await graph.ainvoke(
         {
             "messages": [context_message, *prior_messages, HumanMessage(content=question)],
         },  # type: ignore
-        # The graph is shared across requests, so each call gets its own thread: reusing one per user
-        # would make the checkpointer accumulate messages across requests. The caller owns history.
+        # The graph is shared across requests, so each call gets its own thread: reusing one would make the
+        # checkpointer accumulate messages across requests. The caller owns history.
         config={"configurable": {"thread_id": str(uuid.uuid4())}},
-        context=AgentContext(user_id=user_id, machine_id=machine_id),
+        context=AgentContext(machine_id=machine_id, visibility=visibility, token=token),
     )
     return cast(GraphState, result)
 
 
-def ask(
+async def ask(
     question: str,
-    user_id: str,
     machine_id: str,
+    visibility: str,
+    token: str,
     history: list[HistoryTurn] | None = None,
 ) -> str:
-    result = run(question, user_id, machine_id, history=history)
+    result = await run(question, machine_id, visibility, token, history=history)
     return result["messages"][-1].content

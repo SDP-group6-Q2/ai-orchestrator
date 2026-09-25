@@ -1,16 +1,13 @@
-"""Skill abstraction: a named bundle of prompt instructions + tools.
+"""Skill abstraction: a named bundle of prompt instructions + the names of the MCP tools it uses.
 
-Composition is static — every skill passed to an agent is always active,
-concatenated into one system prompt and one flat tool list at build time.
+The tools themselves are provided by the MCP server (see src/mcp_client.py); a skill only says which of them
+it covers and how to use them. Composition is static: every skill passed to an agent is always active,
+concatenated into one system prompt and one flat list of tool names at build time.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass, field
-
-from langchain_core.messages import ToolMessage
-from langchain_core.tools import BaseTool
+from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
@@ -18,12 +15,11 @@ class Skill:
     name: str
     description: str
     instructions: str
-    tools: list[BaseTool]
-    tool_renderers: dict[str, Callable[[ToolMessage], str | None]] = field(default_factory=dict)
+    tool_names: tuple[str, ...]
 
 
-def compose(base_prompt: str, skills: list[Skill]) -> tuple[str, list[BaseTool]]:
-    """Concatenate skills' instructions onto a base prompt and flatten their tools."""
+def compose(base_prompt: str, skills: list[Skill]) -> tuple[str, list[str]]:
+    """Concatenate skills' instructions onto a base prompt and flatten their tool names."""
     system_prompt = base_prompt + "\n\n" + "\n\n".join(skill.instructions for skill in skills)
-    tools = [tool for skill in skills for tool in skill.tools]
-    return system_prompt, tools
+    tool_names = [name for skill in skills for name in skill.tool_names]
+    return system_prompt, tool_names

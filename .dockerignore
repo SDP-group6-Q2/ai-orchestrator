@@ -4,5 +4,6 @@ __pycache__/
 *.pyc
 .env
 .DS_Store
-data/
 docs/
+tests/
+.pytest_cache/

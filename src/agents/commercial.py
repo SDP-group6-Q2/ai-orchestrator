@@ -4,10 +4,12 @@ import logging
 
 from langchain.agents import create_agent
 from langchain.chat_models import BaseChatModel
+from langchain_core.tools import BaseTool
 from langgraph.checkpoint.base import BaseCheckpointSaver
 
 from src.config import REFERENCE_DATE
 from src.context import AgentContext
+from src.mcp_client import select_tools
 from src.skills import compose, orders_skill, quotes_skill
 
 logger = logging.getLogger(__name__)
@@ -44,7 +46,7 @@ _BASE_PROMPT = (
     "- Do not include technical citations or assistant/function call traces.\n"
     "- Keep answers concise, readable and practical.\n\n"
 
-    "- If a tool returns ACCESS_DENIED_OR_UNAVAILABLE, tell the user that "
+    "- If a tool reports that access is denied, tell the user that "
     "they cannot access commercial information for the requested resource.\n"
     "- Never speculate that an inaccessible resource was cancelled, deleted, "
     "entered incorrectly or does not exist.\n\n"
@@ -65,13 +67,14 @@ _SKILLS = [quotes_skill, orders_skill]
 
 def make_commercial_agent(
     llm: BaseChatModel,
+    tools: list[BaseTool],
     checkpointer: BaseCheckpointSaver | None = None,
 ):
-    system_prompt, tools = compose(_BASE_PROMPT, _SKILLS)
+    system_prompt, tool_names = compose(_BASE_PROMPT, _SKILLS)
 
     return create_agent(
         model=llm,
-        tools=tools,
+        tools=select_tools(tools, tool_names),
         system_prompt=system_prompt,
         checkpointer=checkpointer,
         context_schema=AgentContext,
