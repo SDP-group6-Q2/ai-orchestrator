@@ -37,6 +37,8 @@ def render_skills(skills: Sequence[Skill], visibility: str | None) -> str:
         sections.append(
             "## Not available to this user\n"
             + "\n".join(f"- {skill.description}: {advice}" for skill in blocked)
+            + "\nOnly the areas listed here are off limits. Everything else, including everything under \"What you "
+            "can do for this user\", IS available to this user: use your tools for it and never refuse it."
         )
     return "\n\n".join(sections)
 

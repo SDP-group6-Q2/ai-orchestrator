@@ -60,5 +60,58 @@ async def test_a_question_without_a_machine_has_no_machine_in_scope(agent):
     payload, context = agent.calls[0]
     assert context.machine_id is None
     first = payload["messages"][0]
-    assert isinstance(first, SystemMessage) and first.content.startswith("No machine is in scope")
+    assert isinstance(first, SystemMessage) and first.content.startswith("No machine is in scope") and "Reply in English" in first.content
     assert "machine_id: None" not in first.content
+
+
+def test_typographic_hyphens_in_ids_and_names_become_ascii():
+    text = "Machine MCH‑0001 and TS‑EURO‑PK, quote QTE–2025‑0001, pick‑and‑place – a dash."
+    assert assistant.normalize_answer(text) == "Machine MCH-0001 and TS-EURO-PK, quote QTE-2025-0001, pick-and-place – a dash."
+
+
+def test_ordinary_punctuation_is_left_alone():
+    text = "Range 10–20 - fine — really: ABC-123."
+    assert assistant.normalize_answer(text) == text
+
+
+async def test_a_transient_model_error_is_retried_once(agent, monkeypatch):
+    import ollama
+
+    calls = {"n": 0}
+    original = agent.ainvoke
+
+    async def flaky(payload, config=None, context=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise ollama.ResponseError("Internal Server Error", 500)
+        return await original(payload, config=config, context=context)
+
+    monkeypatch.setattr(agent, "ainvoke", flaky)
+    result = await assistant.ask("q", "MCH-0001", "full", "tok")
+    assert calls["n"] == 2 and result.answer == "the answer"
+
+
+async def test_a_persistent_or_client_error_is_not_retried_forever(agent, monkeypatch):
+    import ollama
+    import pytest
+
+    calls = {"n": 0}
+
+    async def always_500(payload, config=None, context=None):
+        calls["n"] += 1
+        raise ollama.ResponseError("down", 503)
+
+    monkeypatch.setattr(agent, "ainvoke", always_500)
+    with pytest.raises(ollama.ResponseError):
+        await assistant.ask("q", "MCH-0001", "full", "tok")
+    assert calls["n"] == 2
+
+    async def bad_request(payload, config=None, context=None):
+        calls["n"] += 1
+        raise ollama.ResponseError("bad", 400)
+
+    calls["n"] = 0
+    monkeypatch.setattr(agent, "ainvoke", bad_request)
+    with pytest.raises(ollama.ResponseError):
+        await assistant.ask("q", "MCH-0001", "full", "tok")
+    assert calls["n"] == 1

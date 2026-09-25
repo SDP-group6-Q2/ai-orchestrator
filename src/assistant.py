@@ -7,11 +7,14 @@ MCP tools have been loaded.
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Any, TypedDict
 
+import ollama
 from langchain.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_ollama import ChatOllama
 from langgraph.checkpoint.memory import InMemorySaver
@@ -21,6 +24,8 @@ from src.agent import build_agent
 from src.context import AgentContext
 from src.mcp_client import load_tools
 from src.trace import TraceEntry, extract_trace, render_trace_context
+
+logger = logging.getLogger(__name__)
 
 # Older messages are dropped: the caller (the backend) keeps the whole conversation, the model needs a window.
 MAX_HISTORY_MESSAGES = 20
@@ -68,6 +73,17 @@ async def get_agent():
         return _agent
 
 
+# The model writes ids and names with typographic hyphens (MCH‑0001, U+2011) whatever the prompt says. They break
+# copy/paste, search and id matching, so they are turned back into ASCII hyphens after the fact.
+_TYPOGRAPHIC_HYPHEN_IN_ID = re.compile(r"\b([A-Z]{2,5})[\u2010-\u2015](?=\d)")
+_TYPOGRAPHIC_HYPHEN_INSIDE_WORD = re.compile(r"(?<=[A-Za-z0-9])[\u2010\u2011\u2012](?=[A-Za-z0-9])")
+
+
+def normalize_answer(text: str) -> str:
+    text = _TYPOGRAPHIC_HYPHEN_IN_ID.sub(r"\1-", text)
+    return _TYPOGRAPHIC_HYPHEN_INSIDE_WORD.sub("-", text)
+
+
 def _context_message(machine_id: str | None, history: list[HistoryTurn]) -> SystemMessage:
     if machine_id:
         text = (
@@ -76,6 +92,7 @@ def _context_message(machine_id: str | None, history: list[HistoryTurn]) -> Syst
         )
     else:
         text = "No machine is in scope for this conversation."
+    text += " Reply in English."
     earlier = render_trace_context(history)  # type: ignore[arg-type]
     return SystemMessage(content=f"{text}\n\n{earlier}" if earlier else text)
 
@@ -124,5 +141,14 @@ async def ask(
     token: str,
     history: list[HistoryTurn] | None = None,
 ) -> AskResult:
-    state = await run(question, machine_id, visibility, token, history=history)
-    return AskResult(answer=state["messages"][-1].content, trace=extract_trace(state["messages"]))
+    for attempt in (1, 2):
+        try:
+            state = await run(question, machine_id, visibility, token, history=history)
+            break
+        except ollama.ResponseError as error:
+            # The hosted model service sometimes fails transiently (5xx). Every tool is a read-only lookup, so
+            # running the request again is safe; anything else (or a second failure) is the caller's to handle.
+            if attempt == 2 or error.status_code < 500:
+                raise
+            logger.warning("Language model returned %s; retrying once", error.status_code)
+    return AskResult(answer=normalize_answer(state["messages"][-1].content), trace=extract_trace(state["messages"]))

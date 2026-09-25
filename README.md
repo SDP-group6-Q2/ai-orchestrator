@@ -33,6 +33,22 @@ python -m src.run_in_terminal --email user@example.com --password '...' --api-ur
 
 Tests: `pip install -r requirements-dev.txt && pytest`.
 
+## Evaluating prompts and skills
+
+Prompt, skill and tool-description changes are measured, not guessed: `evals/` holds 25 scenarios (question, user
+tier, expected tools, text checks) that run against the real model through `POST /chat`, using the seeded dataset
+users. Checks cover tool choice, grounding (a manual search for how-to questions), refusals for the wrong tier,
+currency, English replies, no "would you like me to..." offers, and ASCII identifiers.
+
+```bash
+docker compose exec -e API_URL=http://api:8000 -e ORCHESTRATOR_URL=http://localhost:8001 orchestrator \
+    python -m evals.run --repeat 2 --out /tmp/results.json       # add --only id1,id2 to pick scenarios
+docker compose exec orchestrator python -m evals.run --rescore /tmp/results.json   # re-apply changed checks, no model calls
+```
+
+The model is non-deterministic and slow (about 20 minutes for the whole set twice), so use `--repeat` to see how
+stable a result is.
+
 ## Tracing (LangSmith)
 
 Every request can be traced to [LangSmith](https://smith.langchain.com): each model call, tool call and the whole

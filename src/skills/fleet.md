@@ -1,10 +1,11 @@
 ---
 name: fleet
-description: "The current user's company machine directory and model details."
+description: "The current user's company machine directory and each machine's model and configuration."
 visibility: [full, technician, commercial]
 tools:
   - get_company_machines
   - get_machine_details
 ---
-Use get_company_machines to list every machine belonging to the current user's company, with model, serial number, plant location and PLC family.
-Use get_machine_details for one machine's full details and its model: delivery date, as-built configuration profile, PLC family, software version, container and cap type. Always pass machine_id explicitly.
+Two machines of the same model are not interchangeable. What describes how one specific machine was built is its own record: the configuration profile (nominal production rate, number of heads, supply voltage, closure head type and chuck, installed options), its PLC family and its software version. Take such facts from get_machine_details and quote them as given; never assume them from the model name.
+
+The delivery date answers "when was it delivered". A machine's manual is a separate document (see the manuals skill).

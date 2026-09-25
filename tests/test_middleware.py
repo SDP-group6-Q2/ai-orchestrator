@@ -56,10 +56,10 @@ async def test_the_model_only_sees_its_tiers_tools():
 async def test_prompt_has_base_allowed_skills_and_the_unavailable_note():
     prompt = (await _seen_by_model("technician")).system_prompt
     assert prompt.startswith("BASE")
-    assert "get_telemetry_summary" in prompt  # a diagnostics instruction
+    assert "Telemetry covers roughly" in prompt  # a diagnostics instruction
     assert "get_quote_revisions" not in prompt  # quotes instructions are not shown to a technician
-    assert "Not available to this user" in prompt
-    assert "Quotations, revision history" in prompt and "access tier (technician)" in prompt
+    assert "Not available to this user" in prompt and "IS available to this user" in prompt
+    assert "Quotations, their revision history" in prompt and "access tier (technician)" in prompt
 
 
 def test_full_tier_has_no_unavailable_section():
