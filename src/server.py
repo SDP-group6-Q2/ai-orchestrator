@@ -10,8 +10,9 @@ credentials of its own.
 from __future__ import annotations
 
 import logging
-from typing import Literal
+from typing import Any, Literal
 
+import ollama
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
@@ -20,12 +21,22 @@ from src.mcp_client import McpUnavailableError
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
+logger = logging.getLogger(__name__)
+
 app = FastAPI(title="ai-orchestrator")
+
+
+class TraceEntry(BaseModel):
+    tool: str
+    args: dict[str, Any] = {}
+    summary: str = ""
+    error: bool = False
 
 
 class HistoryTurn(BaseModel):
     role: Literal["user", "assistant"]
     content: str
+    trace: list[TraceEntry] | None = None  # what an earlier assistant turn retrieved
 
 
 class ChatRequest(BaseModel):
@@ -37,6 +48,7 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     answer: str
+    trace: list[TraceEntry] = []  # this turn's tool calls: store it with the answer, send it back in `history`
 
 
 def _bearer_token(authorization: str | None) -> str:
@@ -50,13 +62,17 @@ def _bearer_token(authorization: str | None) -> str:
 async def chat(request: ChatRequest, authorization: str | None = Header(default=None)) -> ChatResponse:
     token = _bearer_token(authorization)
     try:
-        answer = await ask(
+        result = await ask(
             request.question,
             request.machine_id,
             request.visibility,
             token,
-            history=[turn.model_dump() for turn in request.history],  # type: ignore[arg-type]
+            history=[turn.model_dump(exclude_none=True) for turn in request.history],  # type: ignore[misc]
         )
     except McpUnavailableError as error:
         raise HTTPException(status_code=503, detail="The data tools are temporarily unavailable.") from error
-    return ChatResponse(answer=answer)
+    except (ollama.ResponseError, ConnectionError) as error:
+        # The language model service failed or is unreachable: not our bug, and worth retrying.
+        logger.exception("Language model call failed")
+        raise HTTPException(status_code=502, detail="The language model is temporarily unavailable.") from error
+    return ChatResponse(answer=result.answer, trace=result.trace)  # type: ignore[arg-type]

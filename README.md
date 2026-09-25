@@ -1,9 +1,10 @@
 # ai-orchestrator
 
-The AI layer of the AROL Customer Platform: a LangGraph graph that routes each request (via an LLM classifier)
-to a `technical_agent` (machines, telemetry, alarms, maintenance tickets, manuals) or a `commercial_agent`
-(quotes and orders). It holds no data of its own: the agents' tools come from the **MCP server**, which calls
-the platform API with the end user's own token. See [Documentation](docs/README.md).
+The AI layer of the AROL Customer Platform: **one LangGraph agent** that answers technical questions (machines,
+telemetry, alarms, maintenance tickets, manuals) and commercial ones (quotes and orders), including questions
+that span both. It holds no data of its own: its tools come from the **MCP server**, which calls the platform
+API with the end user's own token, and which tools and instructions the model gets depends on the user's access
+tier. See [Documentation](docs/README.md).
 
 ## Run it
 

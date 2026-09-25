@@ -1,6 +1,5 @@
 """Assistant package exports."""
 
-from src.assistant import ask, run
-from src.state import GraphState
+from src.assistant import AskResult, ask, run
 
-__all__ = ["ask", "run", "GraphState"]
+__all__ = ["AskResult", "ask", "run"]

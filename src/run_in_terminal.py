@@ -18,7 +18,7 @@ import os
 
 import httpx
 
-from src.assistant import ask
+from src.assistant import HistoryTurn, ask
 
 
 def _parse_args() -> argparse.Namespace:
@@ -57,14 +57,20 @@ def _credentials(args: argparse.Namespace) -> tuple[str, str]:
     raise SystemExit("Provide --email and --password, or --token (or set AROL_TOKEN).")
 
 
-async def _run_once(question: str, machine_id: str, visibility: str, token: str) -> None:
-    result = await ask(question, machine_id=machine_id, visibility=visibility, token=token)
-    print(f"\nAssistant: {result}\n")
+async def _run_once(
+    question: str, machine_id: str, visibility: str, token: str, history: list[HistoryTurn]
+) -> None:
+    result = await ask(question, machine_id=machine_id, visibility=visibility, token=token, history=history)
+    print(f"\nAssistant: {result.answer}\n")
+    # Keep the conversation (with what each turn retrieved) so follow-up questions work in a session.
+    history.append({"role": "user", "content": question})
+    history.append({"role": "assistant", "content": result.answer, "trace": result.trace})
 
 
 async def _session(args: argparse.Namespace, token: str, visibility: str) -> None:
+    history: list[HistoryTurn] = []
     if args.question:
-        await _run_once(args.question, args.machine_id, visibility, token)
+        await _run_once(args.question, args.machine_id, visibility, token, history)
         return
 
     print(f"Assistant local terminal session (tier: {visibility}). Type 'exit' or 'quit' to stop.\n")
@@ -80,7 +86,7 @@ async def _session(args: argparse.Namespace, token: str, visibility: str) -> Non
         if question.lower() in {"exit", "quit"}:
             break
 
-        await _run_once(question, args.machine_id, visibility, token)
+        await _run_once(question, args.machine_id, visibility, token, history)
 
 
 def main() -> None:
