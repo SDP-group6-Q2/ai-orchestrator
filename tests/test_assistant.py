@@ -115,3 +115,54 @@ async def test_a_persistent_or_client_error_is_not_retried_forever(agent, monkey
     with pytest.raises(ollama.ResponseError):
         await assistant.ask("q", "MCH-0001", "full", "tok")
     assert calls["n"] == 1
+
+
+async def test_a_dropped_connection_is_retried_like_a_server_error(agent, monkeypatch):
+    import ollama
+
+    calls = {"n": 0}
+    original = agent.ainvoke
+
+    async def dropped(payload, config=None, context=None):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise ollama.ResponseError("Internal Server Error")  # no status: the client reports -1
+        return await original(payload, config=config, context=context)
+
+    monkeypatch.setattr(agent, "ainvoke", dropped)
+    result = await assistant.ask("q", "MCH-0001", "full", "tok")
+    assert calls["n"] == 2 and result.answer == "the answer"
+
+
+def _replying(agent, monkeypatch, *replies):
+    """Make the agent end its turns with these replies, in order."""
+    queue = list(replies)
+
+    async def ainvoke(payload, config=None, context=None):
+        agent.calls.append((payload, context))
+        return {"messages": [*payload["messages"], AIMessage(content=queue.pop(0))]}
+
+    monkeypatch.setattr(agent, "ainvoke", ainvoke)
+
+
+@pytest.mark.parametrize("broken", ["", "  \n", '{"quote_id":"QTE-2025-0008"}', '[{"machine_id": "MCH-0001"}]'])
+async def test_an_empty_or_json_reply_makes_the_model_continue_the_turn(agent, monkeypatch, broken):
+    _replying(agent, monkeypatch, broken, "the real answer")
+    result = await assistant.ask("q", "MCH-0001", "full", "tok")
+    assert result.answer == "the real answer"
+    retried = agent.calls[1][0]["messages"]
+    assert retried[:-1] == agent.calls[0][0]["messages"]  # same turn, the broken reply dropped
+    assert isinstance(retried[-1], SystemMessage) and "Continue" in retried[-1].content
+
+
+async def test_a_second_broken_reply_gets_a_fallback_not_an_empty_answer(agent, monkeypatch):
+    _replying(agent, monkeypatch, "", '{"quote_id":"QTE-2026-0009"}')
+    result = await assistant.ask("q", None, "full", "tok")
+    assert result.answer == assistant.FALLBACK_ANSWER and len(agent.calls) == 2
+
+
+@pytest.mark.parametrize("answer", ["3", "Yes.", "true", "**3 orders**"])
+async def test_short_or_scalar_answers_are_not_mistaken_for_broken_ones(agent, monkeypatch, answer):
+    _replying(agent, monkeypatch, answer)
+    result = await assistant.ask("q", None, "full", "tok")
+    assert result.answer == answer and len(agent.calls) == 1

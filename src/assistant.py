@@ -7,6 +7,7 @@ MCP tools have been loaded.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -16,6 +17,7 @@ from typing import Any, TypedDict
 
 import ollama
 from langchain.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import BaseMessage
 from langchain_ollama import ChatOllama
 from langgraph.checkpoint.memory import InMemorySaver
 from pydantic import SecretStr
@@ -23,7 +25,7 @@ from pydantic import SecretStr
 from src.agent import build_agent
 from src.context import AgentContext
 from src.mcp_client import load_tools
-from src.trace import TraceEntry, extract_trace, render_trace_context
+from src.trace import TraceEntry, _text, extract_trace, render_trace_context
 
 logger = logging.getLogger(__name__)
 
@@ -108,15 +110,20 @@ async def run(
     the MCP server on every tool call (never shown to the model), and `visibility` is their tier, which decides
     which tools and skills the model gets."""
     history = (history or [])[-MAX_HISTORY_MESSAGES:]
+    messages = [_context_message(machine_id, history), *_history_to_messages(history), HumanMessage(content=question)]
+    return await _invoke(messages, machine_id, visibility, token, history_messages=len(history))
+
+
+async def _invoke(
+    messages: list[BaseMessage],
+    machine_id: str | None,
+    visibility: str,
+    token: str,
+    history_messages: int,
+) -> dict[str, Any]:
     agent = await get_agent()
     return await agent.ainvoke(
-        {
-            "messages": [
-                _context_message(machine_id, history),
-                *_history_to_messages(history),
-                HumanMessage(content=question),
-            ],
-        },  # type: ignore
+        {"messages": messages},  # type: ignore
         # The agent is shared across requests, so each call gets its own thread: reusing one would make the
         # checkpointer accumulate messages across requests. The caller owns history.
         config={
@@ -127,11 +134,50 @@ async def run(
             "metadata": {
                 "visibility": visibility,
                 "machine_in_scope": bool(machine_id),
-                "history_messages": len(history),
+                "history_messages": history_messages,
             },
         },
         context=AgentContext(machine_id=machine_id, visibility=visibility, token=SecretStr(token)),
     )
+
+
+def _is_transient(error: ollama.ResponseError) -> bool:
+    # 5xx, or -1: the client's code when the service drops the connection or streams an error without a status.
+    return error.status_code >= 500 or error.status_code == -1
+
+
+async def _retrying(call):
+    """Await `call()`, running it once more if the hosted model service fails transiently. Every tool is a
+    read-only lookup, so running again is safe; anything else (or a second failure) is the caller's to handle."""
+    for attempt in (1, 2):
+        try:
+            return await call()
+        except ollama.ResponseError as error:
+            if attempt == 2 or not _is_transient(error):
+                raise
+            logger.warning("Language model returned %s; retrying once", error.status_code)
+
+
+def _is_answer(message: BaseMessage) -> bool:
+    """False when the model stopped without a usable answer: an empty message, or the arguments of the tool call
+    it meant to make next written out as plain JSON (gpt-oss does this mid-chain; the agent then sees no tool
+    call and stops)."""
+    text = _text(message.content).strip()
+    if not text:
+        return False
+    try:
+        return not isinstance(json.loads(text), (dict, list))
+    except ValueError:
+        return True
+
+
+_CONTINUE = SystemMessage(
+    content="Your last reply reached the user empty or as raw JSON. Continue: if you need more data, call the "
+    "tool through a proper tool call; otherwise write the answer to the user's question now."
+)
+FALLBACK_ANSWER = (
+    "Sorry, I couldn't put an answer together this time. Please try again, or split the question into smaller ones."
+)
 
 
 async def ask(
@@ -141,14 +187,14 @@ async def ask(
     token: str,
     history: list[HistoryTurn] | None = None,
 ) -> AskResult:
-    for attempt in (1, 2):
-        try:
-            state = await run(question, machine_id, visibility, token, history=history)
-            break
-        except ollama.ResponseError as error:
-            # The hosted model service sometimes fails transiently (5xx). Every tool is a read-only lookup, so
-            # running the request again is safe; anything else (or a second failure) is the caller's to handle.
-            if attempt == 2 or error.status_code < 500:
-                raise
-            logger.warning("Language model returned %s; retrying once", error.status_code)
-    return AskResult(answer=normalize_answer(state["messages"][-1].content), trace=extract_trace(state["messages"]))
+    state = await _retrying(lambda: run(question, machine_id, visibility, token, history=history))
+    messages = state["messages"]
+    if not _is_answer(messages[-1]):
+        # Continue the same turn once, without the broken message, so the tools already called aren't repeated.
+        logger.warning("Model stopped without an answer (%r); asking it to continue", _text(messages[-1].content)[:80])
+        retry_messages = [*messages[:-1], _CONTINUE]
+        history_messages = len((history or [])[-MAX_HISTORY_MESSAGES:])
+        state = await _retrying(lambda: _invoke(retry_messages, machine_id, visibility, token, history_messages))
+        messages = state["messages"]
+    answer = normalize_answer(_text(messages[-1].content)) if _is_answer(messages[-1]) else FALLBACK_ANSWER
+    return AskResult(answer=answer, trace=extract_trace(messages))
