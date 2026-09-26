@@ -48,8 +48,8 @@ async def test_the_model_only_sees_its_tiers_tools():
     technician = await _seen_by_model("technician")
     names = {t.name for t in technician.tools}
     assert len(names) == 10 and "get_company_quotes" not in names and "get_alarm_summary" in names
-    assert len((await _seen_by_model("full")).tools) == 19
-    assert len((await _seen_by_model("commercial")).tools) == 12
+    assert len((await _seen_by_model("full")).tools) == 21
+    assert len((await _seen_by_model("commercial")).tools) == 14
     assert (await _seen_by_model(None)).tools == []
 
 
