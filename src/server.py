@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal
 
-import ollama
+import anthropic
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
@@ -71,8 +71,8 @@ async def chat(request: ChatRequest, authorization: str | None = Header(default=
         )
     except McpUnavailableError as error:
         raise HTTPException(status_code=503, detail="The data tools are temporarily unavailable.") from error
-    except (ollama.ResponseError, ConnectionError) as error:
-        # The language model service failed or is unreachable: not our bug, and worth retrying.
+    except (anthropic.APIError, ConnectionError) as error:
+        # The Claude API failed or is unreachable: not our bug, and worth retrying.
         logger.exception("Language model call failed")
         raise HTTPException(status_code=502, detail="The language model is temporarily unavailable.") from error
     return ChatResponse(answer=result.answer, trace=result.trace)  # type: ignore[arg-type]

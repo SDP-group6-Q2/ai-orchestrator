@@ -14,21 +14,22 @@ Normally through docker compose, from the project root: the backend calls `POST 
 docker compose up -d           # db, api, mcp-server and orchestrator
 ```
 
-To try it directly from a terminal (needs the MCP server and the API running, and [Ollama](https://ollama.com/download)
-with a tool-calling model such as `gpt-oss:20b-cloud`):
+To try it directly from a terminal (needs the MCP server and the API running, and an Anthropic API key):
 
 ```bash
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 export MCP_SERVER_URL=http://localhost:9000/mcp
+export ANTHROPIC_API_KEY=sk-ant-...
 python -m src.run_in_terminal --email user@example.com --password '...' --api-url http://localhost:8000 \
     --machine-id MCH-0001
 ```
 
 | Variable | Description | Default |
 | --- | --- | --- |
+| `ANTHROPIC_API_KEY` | Anthropic API key (read by the Anthropic SDK; required) | none |
+| `ANTHROPIC_MODEL` | Claude model the assistant uses | `claude-opus-5-5` |
 | `MCP_SERVER_URL` | The MCP server's streamable-HTTP endpoint | `http://localhost:9000/mcp` |
-| `LLAMA_MODEL` / `LLAMA_BASE_URL` | Ollama model and server | `gpt-oss:20b-cloud` / `http://localhost:11434` |
 | `REFERENCE_DATE` | "Today" the agents reason relative dates from, pinned inside the dataset's date window | `2026-08-05` |
 
 Tests: `pip install -r requirements-dev.txt && pytest`.

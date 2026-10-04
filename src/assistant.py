@@ -15,10 +15,10 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, TypedDict
 
-import ollama
+import anthropic
 from langchain.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_anthropic import ChatAnthropic
 from langchain_core.messages import BaseMessage
-from langchain_ollama import ChatOllama
 from langgraph.checkpoint.memory import InMemorySaver
 from pydantic import SecretStr
 
@@ -60,16 +60,19 @@ _agent_lock = asyncio.Lock()
 
 
 async def get_agent():
-    """Build the agent once per process. Model settings come from LLAMA_MODEL / LLAMA_BASE_URL.
+    """Build the agent once per process. The model is ANTHROPIC_MODEL (default claude-opus-5-5); the API key is
+    read from ANTHROPIC_API_KEY by the Anthropic SDK.
 
     Raises McpUnavailableError if the MCP server's tools can't be loaded; the next call retries."""
     global _agent
     async with _agent_lock:
         if _agent is None:
             tools = await load_tools()
-            llm = ChatOllama(
-                model=os.getenv("LLAMA_MODEL", "gpt-oss:20b-cloud"),
-                base_url=os.getenv("LLAMA_BASE_URL", "http://localhost:11434"),
+            llm = ChatAnthropic(
+                model=os.getenv("ANTHROPIC_MODEL", "claude-opus-5-5"),
+                max_tokens=16000,  # the default (1024) cuts off long answers
+                # One retry is done in _retrying, so the SDK's own retries are turned off to avoid stacking them.
+                max_retries=0,
             )
             _agent = build_agent(llm=llm, tools=tools, checkpointer=InMemorySaver())
         return _agent
@@ -141,26 +144,28 @@ async def _invoke(
     )
 
 
-def _is_transient(error: ollama.ResponseError) -> bool:
-    # 5xx, or -1: the client's code when the service drops the connection or streams an error without a status.
-    return error.status_code >= 500 or error.status_code == -1
+def _is_transient(error: anthropic.APIError) -> bool:
+    # A 5xx, or the connection to the API failing (or timing out) before an answer came back.
+    if isinstance(error, anthropic.APIConnectionError):
+        return True
+    return isinstance(error, anthropic.APIStatusError) and error.status_code >= 500
 
 
 async def _retrying(call):
-    """Await `call()`, running it once more if the hosted model service fails transiently. Every tool is a
-    read-only lookup, so running again is safe; anything else (or a second failure) is the caller's to handle."""
+    """Await `call()`, running it once more if the Claude API fails transiently. Every tool is a read-only lookup,
+    so running again is safe; anything else (or a second failure) is the caller's to handle."""
     for attempt in (1, 2):
         try:
             return await call()
-        except ollama.ResponseError as error:
+        except anthropic.APIError as error:
             if attempt == 2 or not _is_transient(error):
                 raise
-            logger.warning("Language model returned %s; retrying once", error.status_code)
+            logger.warning("Language model call failed (%s); retrying once", error)
 
 
 def _is_answer(message: BaseMessage) -> bool:
     """False when the model stopped without a usable answer: an empty message, or the arguments of the tool call
-    it meant to make next written out as plain JSON (gpt-oss does this mid-chain; the agent then sees no tool
+    it meant to make next written out as plain JSON (a model can do this mid-chain; the agent then sees no tool
     call and stops)."""
     text = _text(message.content).strip()
     if not text:

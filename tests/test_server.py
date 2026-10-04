@@ -1,4 +1,5 @@
-import ollama
+import anthropic
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -7,6 +8,7 @@ from src.assistant import AskResult
 from src.mcp_client import McpUnavailableError
 
 BODY = {"question": "q", "machine_id": "MCH-0001", "visibility": "technician", "history": []}
+REQUEST = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
 AUTH = {"Authorization": "Bearer abc.def"}
 client = TestClient(server.app)
 
@@ -49,8 +51,9 @@ def test_an_unknown_tier_is_rejected(monkeypatch):
     "error, status",
     [
         (McpUnavailableError("down"), 503),
-        (ollama.ResponseError("Internal Server Error", 500), 502),
-        (ConnectionError("no ollama"), 502),
+        (anthropic.InternalServerError("Internal Server Error", response=httpx.Response(500, request=REQUEST), body=None), 502),
+        (anthropic.APIConnectionError(request=REQUEST), 502),
+        (ConnectionError("no route to the API"), 502),
     ],
 )
 def test_upstream_failures_are_mapped_not_500(monkeypatch, error, status):

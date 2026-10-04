@@ -1,7 +1,19 @@
+import anthropic
+import httpx
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 import src.assistant as assistant
+
+REQUEST = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+
+
+def _status_error(status: int) -> anthropic.APIStatusError:
+    return anthropic.APIStatusError(f"error {status}", response=httpx.Response(status, request=REQUEST), body=None)
+
+
+def _connection_error() -> anthropic.APIConnectionError:
+    return anthropic.APIConnectionError(request=REQUEST)
 
 
 class FakeAgent:
@@ -75,15 +87,13 @@ def test_ordinary_punctuation_is_left_alone():
 
 
 async def test_a_transient_model_error_is_retried_once(agent, monkeypatch):
-    import ollama
-
     calls = {"n": 0}
     original = agent.ainvoke
 
     async def flaky(payload, config=None, context=None):
         calls["n"] += 1
         if calls["n"] == 1:
-            raise ollama.ResponseError("Internal Server Error", 500)
+            raise _status_error(500)
         return await original(payload, config=config, context=context)
 
     monkeypatch.setattr(agent, "ainvoke", flaky)
@@ -92,41 +102,36 @@ async def test_a_transient_model_error_is_retried_once(agent, monkeypatch):
 
 
 async def test_a_persistent_or_client_error_is_not_retried_forever(agent, monkeypatch):
-    import ollama
-    import pytest
-
     calls = {"n": 0}
 
-    async def always_500(payload, config=None, context=None):
+    async def always_503(payload, config=None, context=None):
         calls["n"] += 1
-        raise ollama.ResponseError("down", 503)
+        raise _status_error(503)
 
-    monkeypatch.setattr(agent, "ainvoke", always_500)
-    with pytest.raises(ollama.ResponseError):
+    monkeypatch.setattr(agent, "ainvoke", always_503)
+    with pytest.raises(anthropic.APIStatusError):
         await assistant.ask("q", "MCH-0001", "full", "tok")
     assert calls["n"] == 2
 
     async def bad_request(payload, config=None, context=None):
         calls["n"] += 1
-        raise ollama.ResponseError("bad", 400)
+        raise _status_error(400)
 
     calls["n"] = 0
     monkeypatch.setattr(agent, "ainvoke", bad_request)
-    with pytest.raises(ollama.ResponseError):
+    with pytest.raises(anthropic.APIStatusError):
         await assistant.ask("q", "MCH-0001", "full", "tok")
     assert calls["n"] == 1
 
 
 async def test_a_dropped_connection_is_retried_like_a_server_error(agent, monkeypatch):
-    import ollama
-
     calls = {"n": 0}
     original = agent.ainvoke
 
     async def dropped(payload, config=None, context=None):
         calls["n"] += 1
         if calls["n"] == 1:
-            raise ollama.ResponseError("Internal Server Error")  # no status: the client reports -1
+            raise _connection_error()
         return await original(payload, config=config, context=context)
 
     monkeypatch.setattr(agent, "ainvoke", dropped)
@@ -166,3 +171,20 @@ async def test_short_or_scalar_answers_are_not_mistaken_for_broken_ones(agent, m
     _replying(agent, monkeypatch, answer)
     result = await assistant.ask("q", None, "full", "tok")
     assert result.answer == answer and len(agent.calls) == 1
+
+
+async def test_claude_style_content_with_thinking_and_tool_calls_yields_the_text(agent, monkeypatch):
+    # Claude returns a list of blocks: thinking (ignored), then the text. The text is what the user sees.
+    content = [
+        {"type": "thinking", "thinking": "Let me work out the answer.", "signature": "sig"},
+        {"type": "text", "text": "Machine MCH‑0001 has **no** open alarms."},
+    ]
+    _replying(agent, monkeypatch, content)
+    result = await assistant.ask("q", "MCH-0001", "full", "tok")
+    assert result.answer == "Machine MCH-0001 has **no** open alarms."
+    assert len(agent.calls) == 1
+
+
+def test_a_claude_block_list_with_only_thinking_is_not_an_answer():
+    message = AIMessage(content=[{"type": "thinking", "thinking": "hmm", "signature": "sig"}])
+    assert assistant._is_answer(message) is False

@@ -25,8 +25,7 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the assistant locally from the terminal.")
     parser.add_argument("--question", help="Single question to ask, then exit. Omit to start an interactive session.")
     parser.add_argument("--machine-id", default=None, help="Machine in scope for the conversation (optional).")
-    parser.add_argument("--model", default="gpt-oss:20b-cloud", help="Ollama model name.")
-    parser.add_argument("--base-url", default="http://localhost:11434", help="Ollama server base URL.")
+    parser.add_argument("--model", default=None, help="Claude model name (default: ANTHROPIC_MODEL or claude-opus-5-5).")
 
     auth = parser.add_argument_group("who you are (either a login, or a token and tier)")
     auth.add_argument("--email", help="Log in through the API with this email...")
@@ -93,8 +92,8 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     args = _parse_args()
     # Read when src.assistant builds its graph, lazily on the first ask.
-    os.environ["LLAMA_MODEL"] = args.model
-    os.environ["LLAMA_BASE_URL"] = args.base_url
+    if args.model:
+        os.environ["ANTHROPIC_MODEL"] = args.model
     token, visibility = _credentials(args)
     asyncio.run(_session(args, token, visibility))
 
